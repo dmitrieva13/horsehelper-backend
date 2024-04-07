@@ -12,8 +12,7 @@ app.use(bodyParser.json())
 var corsOptions = { origin: '*', optionsSuccessStatus: 200 }
 app.use(cors(corsOptions));  
 
-// Database
-mongoose.connect("mongodb://localhost:27017")
+mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
 const User = require("./models/User.js")
 const Horse = require("./models/Horse.js")
 
