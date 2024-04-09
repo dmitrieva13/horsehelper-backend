@@ -1,8 +1,10 @@
 const   cors        = require("cors"),
-        express     = require('express'),
+        express     = require("express"),
         mongoose    = require("mongoose"),
         bodyParser  = require("body-parser"),
         jwt         = require("jsonwebtoken")
+        ctt         = require("cyrillic-to-translit-js");
+        
 
 const app = express()
 
@@ -19,6 +21,8 @@ const Horse = require("./models/Horse.js")
 // Middleware
 const auth = require("./middleware/auth");
 const HorseUnavailable = require("./models/HorseUnavailable")
+
+const cyrillicToTranslit = new ctt();
 
 
 app.get("/", (req, res) => {
@@ -45,10 +49,10 @@ app.post("/register", (req, res) => {
             }
 
             let newId = Math.floor(Math.random() * 9000000) + 1000000
-            const accessToken = jwt.sign({  id: newId, phone: req.body.phone, role },
+            const accessToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name },
                 "process.env.TOKEN_KEY", {expiresIn: "2h"}
             );
-            const refreshToken = jwt.sign({  id: newId, phone: req.body.phone, role }, 
+            const refreshToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name }, 
                 "process.env.TOKEN_KEY", { expiresIn: '100d' }
             );
 
@@ -75,6 +79,10 @@ app.post("/login", (req, res) => {
         // No user found
         if (!data) { res.sendStatus(404) }
         else {
+            if (req.body.password != data.password) {
+                return res.status(401).json({ message: "wrong password" })
+            }
+
             const accessToken = jwt.sign(
                 { id: data.id, phone: data.phone, role: data.role, name: data.name },
                 "process.env.TOKEN_KEY", {expiresIn: "2h"}
@@ -136,7 +144,7 @@ app.post("/add_horse", auth, (req, res) => {
 
     let { accessToken, refreshToken } = req.user
     
-    let newId = req.body.name.split(' ').join('-').toLowerCase()
+    let newId = cyrillicToTranslit.transform(req.body.name, '-').toLowerCase();
     const horse = new Horse({
         id: newId, name: req.body.name, photo: req.body.photo, description: req.body.description,
         types: req.body.types
@@ -181,7 +189,7 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
         return res.status(401).json({ message: "not permitted" })
     }
     
-    HorseUnavailable.findOne({
+    Horse.findOne({
         id: req.body.id
     }).then((data) => {
         if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
@@ -208,26 +216,26 @@ app.post("/get_unavailable_days", auth, (req, res) => {
         return res.status(401).json({ message: "not permitted" })
     }
     
-    HorseUnavailable.findOne({
-        id: req.body.id
-    }).then((data) => {
-        if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
-        else {
+    // HorseUnavailable.findOne({
+    //     id: req.body.id
+    // }).then((data) => {
+    //     if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
+    //     else {
             
-            let date = new Date(req.body.date)
-            const horseUnavailable = new HorseUnavailable({
-                id: req.body.id, date: date
-            })
-            horseUnavailable.save().then(() => console.log('Unavilable entry added!'))
+    //         let date = new Date(req.body.date)
+    //         const horseUnavailable = new HorseUnavailable({
+    //             id: req.body.id, date: date
+    //         })
+    //         horseUnavailable.save().then(() => console.log('Unavilable entry added!'))
 
-            res.status(200).json({
-                id: req.body.id,
-                date: date,
-                accessToken,
-                refreshToken
-            })
-        }
-    })
+    //         res.status(200).json({
+    //             id: req.body.id,
+    //             date: date,
+    //             accessToken,
+    //             refreshToken
+    //         })
+    //     }
+    // })
 })
 
 app.listen(3001)

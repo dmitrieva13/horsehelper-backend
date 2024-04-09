@@ -5,7 +5,10 @@ let user = new mongoose.Schema({
     role: String,
     phone: String,
     password: String,
-    name: String
+    name: String,
+    trainerPhoto: String,
+    trainerDescription: String,
+    trainerType: String
 })
 
 module.exports = mongoose.model("User", user, "User")
