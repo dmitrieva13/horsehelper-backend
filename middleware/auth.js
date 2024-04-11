@@ -14,6 +14,10 @@ const verifyToken = (req, res, next) => {
         req.user = {accessToken, refreshToken, id: accessDecoded.id, phone: accessDecoded.phone,
             role: accessDecoded.role, name: accessDecoded.name}
     } catch (err) {
+        if (err.name == "TokenExpiredError" && !refreshToken) {
+            return res.status(401).json({errorMessage: "Token is expired"});
+        }
+        
         try {
             const refreshDecoded = jwt.verify(refreshToken, "process.env.TOKEN_KEY")
             console.log("refreshing both")

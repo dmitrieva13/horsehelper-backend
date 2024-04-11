@@ -224,6 +224,35 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
     })
 })
 
+app.post("/make_horse_available", auth, (req, res) => {
+    if (req.user.role != "admin") {
+        return res.status(401).json({ message: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+    let date
+    try {
+        date = new Date(req.body.date)
+    }
+    catch(e){
+        return res.status(401).json({ message: "date is wrong" })
+    }
+    
+    HorseUnavailable.deleteOne({
+        id: req.body.id, date
+    }).then((data) => {
+        console.log(data)
+        if (data.deletedCount == 0) { return res.status(401).json({ message: "no such entry" }) }
+        else {
+            res.status(200).json({
+                message: "Entry was removed",
+                accessToken,
+                refreshToken
+            })
+        }
+    })
+})
+
 app.post("/get_unavailable_days", auth, (req, res) => {
     if (req.user.role != "admin") {
         return res.status(401).json({ message: "not permitted" })
