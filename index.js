@@ -17,10 +17,11 @@ app.use(cors(corsOptions));
 mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
 const User = require("./models/User.js")
 const Horse = require("./models/Horse.js")
+const HorseUnavailable = require("./models/HorseUnavailable")
+const Announcement = require("./models/Announcement")
 
 // Middleware
 const auth = require("./middleware/auth");
-const HorseUnavailable = require("./models/HorseUnavailable")
 
 const cyrillicToTranslit = new ctt();
 
@@ -146,7 +147,7 @@ app.post("/add_horse", auth, (req, res) => {
 
     let { accessToken, refreshToken } = req.user
     
-    let newId = cyrillicToTranslit.transform(req.body.name, '-').toLowerCase();
+    let newId = cyrillicToTranslit.transform(req.body.name, '-').toLowerCase()
     const horse = new Horse({
         id: newId, name: req.body.name, photo: req.body.photo, description: req.body.description,
         types: req.body.types
@@ -211,7 +212,7 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
             const horseUnavailable = new HorseUnavailable({
                 id: req.body.id, date: date
             })
-            horseUnavailable.save().then(() => console.log('Unavilable entry added!'))
+            horseUnavailable.save().then(() => console.log('Unavailable entry added!'))
 
             res.status(200).json({
                 id: req.body.id,
@@ -233,9 +234,41 @@ app.post("/get_unavailable_days", auth, (req, res) => {
         id: req.body.id
     }).then((data) => {
         res.status(200).json({
-            unavilableDays: data,
+            unavailableDays: data,
             accessToken,
             refreshToken
+        })
+    })
+})
+
+
+
+app.post("/new_announcement", auth, (req, res) => {
+    if (req.user.role != "admin") {
+        return res.status(401).json({ message: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+            
+    let date = new Date()
+    let id = cyrillicToTranslit.transform(req.body.title, '-').toLowerCase()
+
+    const announcement = new Announcement({
+        id, date: date, title: req.body.title, body: req.body.body
+    })
+    announcement.save().then(() => console.log('New announcement added!'))
+
+    res.status(200).json({
+        id,
+        accessToken,
+        refreshToken
+    })
+})
+
+app.post("/announcements", (req, res) => {
+    Announcements.find({}).then((data) => {
+        res.status(200).json({
+            announcements: data
         })
     })
 })
