@@ -123,7 +123,9 @@ app.post("/register_trainer", auth, (req, res) => {
 
             let newId = Math.floor(Math.random() * 9000000) + 1000000
             const user = new User({
-                phone: req.body.phone, password: req.body.password, id: newId, role: "trainer", name: req.body.name
+                phone: req.body.phone, password: req.body.password, id: newId, role: "trainer",
+                name: req.body.name, trainerPhoto: req.body.trainerPhoto,
+                trainerDescription: req.body.trainerDescription, trainerType: req.body.trainerType
             })
             user.save().then(() => console.log('Trainer added!'))
           
@@ -184,10 +186,20 @@ app.post("/get_horse", auth, (req, res) => {
     })
 })
 
+app.post("/all_horses", (req, res) => {
+    Horse.find({
+    }).then((data) => {
+        res.status(200).json({
+            horses: data
+        })
+    })
+})
+
 app.post("/make_horse_unavailable", auth, (req, res) => {
     if (req.user.role != "admin") {
         return res.status(401).json({ message: "not permitted" })
     }
+    let { accessToken, refreshToken } = req.user
     
     Horse.findOne({
         id: req.body.id
@@ -215,6 +227,7 @@ app.post("/get_unavailable_days", auth, (req, res) => {
     if (req.user.role != "admin") {
         return res.status(401).json({ message: "not permitted" })
     }
+    let { accessToken, refreshToken } = req.user
     
     // HorseUnavailable.findOne({
     //     id: req.body.id
