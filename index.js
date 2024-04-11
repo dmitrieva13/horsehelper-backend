@@ -229,26 +229,15 @@ app.post("/get_unavailable_days", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
     
-    // HorseUnavailable.findOne({
-    //     id: req.body.id
-    // }).then((data) => {
-    //     if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
-    //     else {
-            
-    //         let date = new Date(req.body.date)
-    //         const horseUnavailable = new HorseUnavailable({
-    //             id: req.body.id, date: date
-    //         })
-    //         horseUnavailable.save().then(() => console.log('Unavilable entry added!'))
-
-    //         res.status(200).json({
-    //             id: req.body.id,
-    //             date: date,
-    //             accessToken,
-    //             refreshToken
-    //         })
-    //     }
-    // })
+    HorseUnavailable.find({
+        id: req.body.id
+    }).then((data) => {
+        res.status(200).json({
+            unavilableDays: data,
+            accessToken,
+            refreshToken
+        })
+    })
 })
 
 app.listen(3001)
