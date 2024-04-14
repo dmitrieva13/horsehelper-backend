@@ -19,6 +19,7 @@ const User = require("./models/User.js")
 const Horse = require("./models/Horse.js")
 const HorseUnavailable = require("./models/HorseUnavailable")
 const Announcement = require("./models/Announcement")
+const WorkingDay = require("./models/WorkingDay")
 
 // Middleware
 const auth = require("./middleware/auth");
@@ -298,6 +299,83 @@ app.post("/announcements", (req, res) => {
     Announcements.find({}).then((data) => {
         res.status(200).json({
             announcements: data
+        })
+    })
+})
+
+
+
+app.post("/set_working_day", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ message: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    
+    let date
+    try {
+        date = new Date(req.body.date)
+    }
+    catch(e){
+        return res.status(401).json({ message: "date is wrong" })
+    }
+
+    const workingDay = new WorkingDay({
+        trainerId: req.user.id, date
+    })
+    workingDay.save().then(() => console.log('New working day added!'))
+
+    res.status(200).json({
+        message: "Working day is added",
+        date: date,
+        accessToken,
+        refreshToken
+    })
+})
+
+
+app.post("/undo_working_day", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ message: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+    let date
+    try {
+        date = new Date(req.body.date)
+    }
+    catch(e){
+        return res.status(401).json({ message: "date is wrong" })
+    }
+    
+    WorkingDay.deleteOne({
+        trainerId: req.user.id, date
+    }).then((data) => {
+        console.log(data)
+        if (data.deletedCount == 0) { return res.status(401).json({ message: "no such entry" }) }
+        else {
+            res.status(200).json({
+                message: "Working day was removed",
+                accessToken,
+                refreshToken
+            })
+        }
+    })
+})
+
+app.post("/get_working_days", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ message: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+    WorkingDay.find({
+        trainerId: req.user.id
+    }).then((data) => {
+        res.status(200).json({
+            workingDays: data,
+            accessToken,
+            refreshToken
         })
     })
 })
