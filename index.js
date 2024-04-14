@@ -112,7 +112,7 @@ app.post("/register_trainer", auth, (req, res) => {
     }
 
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
 
     let { accessToken, refreshToken } = req.user
@@ -143,7 +143,7 @@ app.post("/register_trainer", auth, (req, res) => {
 
 app.post("/add_horse", auth, (req, res) => {
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
 
     let { accessToken, refreshToken } = req.user
@@ -166,7 +166,7 @@ app.post("/add_horse", auth, (req, res) => {
 
 app.post("/get_horse", auth, (req, res) => {
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
 
     let { accessToken, refreshToken } = req.user
@@ -199,7 +199,7 @@ app.post("/all_horses", (req, res) => {
 
 app.post("/make_horse_unavailable", auth, (req, res) => {
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
     
@@ -227,7 +227,7 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
 
 app.post("/make_horse_available", auth, (req, res) => {
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
     
@@ -256,7 +256,7 @@ app.post("/make_horse_available", auth, (req, res) => {
 
 app.post("/get_unavailable_days", auth, (req, res) => {
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
     
@@ -275,7 +275,7 @@ app.post("/get_unavailable_days", auth, (req, res) => {
 
 app.post("/new_announcement", auth, (req, res) => {
     if (req.user.role != "admin") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
     
@@ -307,7 +307,7 @@ app.post("/announcements", (req, res) => {
 
 app.post("/set_working_day", auth, (req, res) => {
     if (req.user.role != "trainer") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
 
@@ -336,7 +336,7 @@ app.post("/set_working_day", auth, (req, res) => {
 
 app.post("/undo_working_day", auth, (req, res) => {
     if (req.user.role != "trainer") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
     
@@ -365,7 +365,7 @@ app.post("/undo_working_day", auth, (req, res) => {
 
 app.post("/get_working_days", auth, (req, res) => {
     if (req.user.role != "trainer") {
-        return res.status(401).json({ message: "not permitted" })
+        return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
     
