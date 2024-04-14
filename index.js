@@ -296,7 +296,7 @@ app.post("/new_announcement", auth, (req, res) => {
 })
 
 app.post("/announcements", (req, res) => {
-    Announcements.find({}).then((data) => {
+    Announcement.find({}).then((data) => {
         res.status(200).json({
             announcements: data
         })
