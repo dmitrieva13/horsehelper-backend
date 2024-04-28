@@ -396,9 +396,7 @@ app.post("/get_profile", (req, res) => {
                 name: data.name,
                 userPic: data.userPic,
                 userDescription: data.userDescription,
-                role: data.role,
-                accessToken,
-                refreshToken
+                role: data.role
             })
         }
     })
@@ -417,9 +415,7 @@ app.post("/change_profile", auth, (req, res) => {
         if (!data) { return res.status(401).json({ message: "no user with such id" }) }
     else {
 
-        User.updateOne({
-            id: req.body.id
-        },
+        User.updateOne({id: req.body.id},
         {
             $set: {
                 userPic: req.body.userPic,
