@@ -52,10 +52,10 @@ app.post("/register", (req, res) => {
 
             let newId = Math.floor(Math.random() * 9000000) + 1000000
             const accessToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name },
-                "process.env.TOKEN_KEY", {expiresIn: "2h"}
+                "secret string", {expiresIn: "2h"}
             );
             const refreshToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name }, 
-                "process.env.TOKEN_KEY", { expiresIn: '100d' }
+                "secret string", { expiresIn: '100d' }
             );
 
             const user = new User({
@@ -73,7 +73,6 @@ app.post("/register", (req, res) => {
 })
 
 app.post("/login", (req, res) => {
-    console.log(req.body)
     User.findOne({
         phone: req.body.phone
     }).then((data) => {
@@ -87,12 +86,12 @@ app.post("/login", (req, res) => {
 
             const accessToken = jwt.sign(
                 { id: data.id, phone: data.phone, role: data.role, name: data.name },
-                "process.env.TOKEN_KEY", {expiresIn: "2h"}
+                "secret string", {expiresIn: "2h"}
             );
           
             const refreshToken = jwt.sign(
                 { id: data.id, phone: data.phone, role: data.role, name: data.name }, 
-                "process.env.TOKEN_KEY", { expiresIn: '100d' }
+                "secret string", { expiresIn: '100d' }
             );
           
             res.status(200).json({
@@ -164,10 +163,7 @@ app.post("/add_horse", auth, (req, res) => {
 
 })
 
-app.post("/get_horse", auth, (req, res) => {
-    if (req.user.role != "admin") {
-        return res.status(401).json({ error: "not permitted" })
-    }
+app.post("/get_horse", (req, res) => {
 
     let { accessToken, refreshToken } = req.user
     
@@ -378,6 +374,68 @@ app.post("/get_working_days", auth, (req, res) => {
             refreshToken
         })
     })
+})
+
+app.post("/all_trainers", (req, res) => {
+    User.find({
+        role: "trainer"
+    }).then((data) => {
+        res.status(200).json({
+            trainers: data
+        })
+    })
+})
+
+app.post("/get_profile", (req, res) => {
+    User.findOne({
+        id: req.body.id
+    }).then((data) => {
+        if (!data) { return res.status(401).json({ message: "no user with such id" }) }
+        else {
+            res.status(200).json({
+                name: data.name,
+                userPic: data.userPic,
+                userDescription: data.userDescription,
+                role: data.role,
+                accessToken,
+                refreshToken
+            })
+        }
+    })
+})
+
+app.post("/change_profile", auth, (req, res) => {
+    if (req.user.id != req.body.id) {
+        return res.status(401).json({ error: "not permitted to change other's profile" })
+    }
+
+    let { accessToken, refreshToken } = req.user
+
+    User.findOne({
+        id: req.body.id
+    }).then((data) => {
+        if (!data) { return res.status(401).json({ message: "no user with such id" }) }
+    else {
+
+        User.updateOne({
+            id: req.body.id
+        },
+        {
+            $set: {
+                userPic: req.body.userPic,
+                userDescription: req.body.userDescription
+            }
+        }
+        ).then(() => {
+                return res.status(200).json({
+                    accessToken,
+                    refreshToken
+                })
+            }
+        )
+        }
+    })
+
 })
 
 app.listen(3001)

@@ -9,8 +9,7 @@ const verifyToken = (req, res, next) => {
     }
   
     try {
-        const accessDecoded = jwt.verify(accessToken, "process.env.TOKEN_KEY")
-        // console.log(accessDecoded)
+        const accessDecoded = jwt.verify(accessToken, "secret string")
         req.user = {accessToken, refreshToken, id: accessDecoded.id, phone: accessDecoded.phone,
             role: accessDecoded.role, name: accessDecoded.name}
     } catch (err) {
@@ -19,18 +18,18 @@ const verifyToken = (req, res, next) => {
         }
         
         try {
-            const refreshDecoded = jwt.verify(refreshToken, "process.env.TOKEN_KEY")
+            const refreshDecoded = jwt.verify(refreshToken, "secret string")
             console.log("refreshing both")
             console.log(refreshDecoded)
             
             accessToken = jwt.sign({
                 id: refreshDecoded.id, phone: refreshDecoded.phone,
                 role: refreshDecoded.role, name: refreshDecoded.name
-            }, "process.env.TOKEN_KEY", {expiresIn: "2h"});
+            }, "secret string", {expiresIn: "2h"});
             refreshToken = jwt.sign({
                 id: refreshDecoded.id, phone: refreshDecoded.phone, 
                 role: refreshDecoded.role, name: refreshDecoded.name
-            }, "process.env.TOKEN_KEY", { expiresIn: '100d' });
+            }, "secret string", { expiresIn: '100d' });
 
             
             req.user = { accessToken, refreshToken, id: refreshDecoded.id, phone: refreshDecoded.phone,
