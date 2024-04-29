@@ -20,12 +20,24 @@ const Horse = require("./models/Horse.js")
 const HorseUnavailable = require("./models/HorseUnavailable")
 const Announcement = require("./models/Announcement")
 const WorkingDay = require("./models/WorkingDay")
+const Booking = require("./models/Booking.js");
 
 // Middleware
 const auth = require("./middleware/auth");
 
 const cyrillicToTranslit = new ctt();
 
+
+const durations = [{
+    type: "Общая",
+    minutes: 60
+}, {
+    type: "Выездка",
+    minutes: 60
+}, {
+    type: "Конкур",
+    minutes: 60
+}]
 
 app.get("/", (req, res) => {
     res.send("Get / ")
@@ -414,24 +426,203 @@ app.post("/change_profile", auth, (req, res) => {
     }).then((data) => {
         if (!data) { return res.status(401).json({ message: "no user with such id" }) }
     else {
-
         User.updateOne({id: req.body.id},
         {
             $set: {
                 userPic: req.body.userPic,
                 userDescription: req.body.userDescription
             }
-        }
-        ).then(() => {
-                return res.status(200).json({
+        }).then(() => {
+                res.status(200).json({
                     accessToken,
                     refreshToken
                 })
-            }
-        )
+            })
         }
     })
 
+})
+
+app.post("/new_booking", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+    let date
+    try {
+        date = new Date(req.body.date)
+    }
+    catch(e){
+        return res.status(401).json({ message: "date is wrong" })
+    }
+
+    let durationMinutes = durations.find(d => d.type == req.body.type).minutes
+
+    let trainerPhone = ""
+    let trainerPhoto = ""
+    User.findOne({
+        id: req.body.trainerId
+    }).then((data) => {
+        if (!data) { return res.status(401).json({ message: "no trainer with such id" }) }
+        else {
+            trainerPhone = data.phone
+            trainerPhoto = data.trainerPhoto
+        }
+    }).then(() => {
+        let horsePhoto = ""
+        Horse.findOne({
+            id: req.body.horseId
+        }).then((data) => {
+            if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
+            else {
+                horsePhoto = data.photo
+            }
+        }).then(() => {
+            const booking = new Booking({
+                studentId: req.user.id, studentName: req.user.name, studentPhone: req.user.phone, trainerId: req.body.trainerId,
+                trainerName: req.body.trainerName, trainerPhone: trainerPhone, trainerPhoto: trainerPhoto, horseId: req.body.horseId, horseName: req.body.horseName,
+                horsePhoto, date, type: req.body.type, comment: req.body.comment, durationMinutes, isCancelled: false, createdDate: new Date()
+            })
+            booking.save().then(() => console.log('New booking added!'))
+
+            res.status(200).json({
+                message: "Booking is added",
+                date: date,
+                accessToken,
+                refreshToken
+            })
+        })
+    })
+})
+
+app.post("/get_all_bookings_student", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    Booking.find({
+        studentId: req.user.id
+    }).then((data) => {
+        res.status(200).json({
+            bookings: data,
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
+app.post("/get_bookings_trainer", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    Booking.find({
+        trainerId: req.user.id
+    }).then((data) => {
+        res.status(200).json({
+            bookings: data,
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
+app.post("/today_bookings", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
+    let end = new Date()
+    end.setHours(23,59,59,999)
+
+    Booking.find({
+        trainerId: req.user.id,
+        date: {$gte: start, $lt: end}
+    }).then((data) => {
+        res.status(200).json({
+            bookings: data,
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
+app.post("/get_bookings_horse", auth, (req, res) => {
+    if (req.user.role != "admin") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    Booking.find({
+        horseId: req.body.id
+    }).then((data) => {
+        res.status(200).json({
+            bookings: data,
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
+app.post("/cancel_booking", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+    let date
+    try {
+        date = new Date(req.body.date)
+    }
+    catch(e){
+        return res.status(401).json({ message: "date is wrong" })
+    }
+    
+    Booking.updateOne({
+        studentId: req.user.id,
+        trainerId: req.body.trainerId,
+        horseId: req.body.horseId,
+        date
+    },
+    {
+        $set: {
+            isCancelled: true
+        }
+    }).then((data) => {
+        console.log(data)
+        if (data.deletedCount == 0) { return res.status(401).json({ message: "no such entry" }) }
+        else {
+            res.status(200).json({
+                message: "Booking was cancelled",
+                accessToken,
+                refreshToken
+            })
+        }
+    })
+})
+
+app.post("/get_available_trainers", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    Booking.find({
+        horseId: req.body.id
+    }).then((data) => {
+        res.status(200).json({
+            bookings: data,
+            accessToken,
+            refreshToken
+        })
+    })
 })
 
 app.listen(3001)
