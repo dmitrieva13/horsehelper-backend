@@ -11,7 +11,7 @@ const verifyToken = (req, res, next) => {
     try {
         const accessDecoded = jwt.verify(accessToken, "secret string")
         req.user = {accessToken, refreshToken, id: accessDecoded.id, phone: accessDecoded.phone,
-            role: accessDecoded.role, name: accessDecoded.name, trainerType: data.trainerType}
+            role: accessDecoded.role, name: accessDecoded.name, trainerType: accessDecoded.trainerType}
     } catch (err) {
         if (err.name == "TokenExpiredError" && !refreshToken) {
             return res.status(401).json({errorMessage: "Token is expired"});
@@ -35,6 +35,7 @@ const verifyToken = (req, res, next) => {
                 role: refreshDecoded.role, name: refreshDecoded.name, trainerType: refreshDecoded.trainerType }
         }
         catch (err) {
+            console.log(err)
             return res.status(401).json({errorMessage: "Invalid Token"});
         }
     }

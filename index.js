@@ -766,7 +766,11 @@ app.post("/cancel_booking", auth, (req, res) => {
 //     })
 // })
 
-app.post("/get_slots_for_booking", (req, res) => {
+app.post("/get_slots_for_booking", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
 
     let start = new Date()
     start.setHours(0,0,0,0)
@@ -897,7 +901,6 @@ app.post("/get_slots_for_booking", (req, res) => {
                 })
             })
     })
-    
 })
 
 app.get("/horses", (req, res) => {
