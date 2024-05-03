@@ -856,17 +856,16 @@ app.post("/get_slots_for_booking", auth, (req, res) => {
                                         booking.date.getYear() == day.date.getYear()
                                     ) {
                                         daysAndTrainersAndHorses[index].bookings.push(booking)
-                                        console.log(booking.date.getHours())
                                     }
                                 })
                             })
 
                             daysAndTrainersAndHorses.forEach((day, index) => {
-                                for (let i = 10; i <= 20; i++) {
+                                for (let i = 7; i <= 17; i++) {
                                     let trainersAtSlot = [...day.availableTrainers]
                                     let horsesAtSlot = [...day.availableHorses]
 
-                                    let createdBookingI = day.bookings.findIndex(e => e.date.getHours() == i)
+                                    let createdBookingI = day.bookings.findIndex(e => e.date.getUTCHours() == i)
 
                                     if (createdBookingI > -1) {
                                         let trainerIndexToDelete = 
@@ -890,7 +889,6 @@ app.post("/get_slots_for_booking", auth, (req, res) => {
                                 }
                             })
 
-
                             res.status(200).json({
                                 message: daysAndTrainersAndHorses,
                                 accessToken,
@@ -902,75 +900,5 @@ app.post("/get_slots_for_booking", auth, (req, res) => {
             })
     })
 })
-
-app.get("/horses", (req, res) => {
-
-    let start = new Date()
-    start.setHours(0,0,0,0)
-
-    WorkingDay.find({
-            type: "Общая",
-            date: {$gte: start}
-        }).lean().then(workingDays => {
-            return workingDays
-        })
-        .then(workingDays => {
-
-            Horse.find({
-                types: "Общая"
-            }).lean().then((horses) => {
-                return horses
-            })
-            .then(horses => {
-
-                HorseUnavailable.find().lean().then(unav => {
-
-                    User.find({
-                        role: "trainer"
-                    }).lean().then(trainers => {
-                        return trainers
-                    }).then(trainers => {
-
-                        let available = []
-                        workingDays.forEach(day => {
-
-                            
-                            day.horses = []
-                            horses.forEach(horse => {
-                                let add = true
-                                unav.forEach(un => {
-                                    if (horse.id == un.id && un.date.toString() == day.date.toString()) {
-                                        add = false
-                                    }
-                                })
-                                if (add) {
-                                    day.horses.push(horse)
-                                }
-                            })
-
-                            trainers.forEach(trainer => {
-                                if (trainer.id == day.trainerId) {
-                                    day.trainerName = trainer.name
-                                    day.trainerPhoto = trainer.trainerPhoto
-                                    day.trainerDescription = trainer.trainerDescription
-                                }
-                            })
-                            available.push(day)
-                        })
-
-                        let result = []
-
-
-                        res.status(200).json({
-                            message: available,
-                            // accessToken,
-                            // refreshToken
-                        })
-                    })
-                })
-            })
-        })
-})
-
 
 app.listen(3001)
