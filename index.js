@@ -97,12 +97,14 @@ app.post("/login", (req, res) => {
             }
 
             const accessToken = jwt.sign(
-                { id: data.id, phone: data.phone, role: data.role, name: data.name },
+                { id: data.id, phone: data.phone, role: data.role, name: data.name,
+                    trainerType: data.trainerType },
                 "secret string", {expiresIn: "2h"}
             );
           
             const refreshToken = jwt.sign(
-                { id: data.id, phone: data.phone, role: data.role, name: data.name }, 
+                { id: data.id, phone: data.phone, role: data.role, name: data.name,
+                    trainerType: data.trainerType }, 
                 "secret string", { expiresIn: '100d' }
             );
           
@@ -329,7 +331,7 @@ app.post("/set_working_day", auth, (req, res) => {
     }
 
     const workingDay = new WorkingDay({
-        trainerId: req.user.id, date
+        trainerId: req.user.id, date, type: req.user.trainerType
     })
     workingDay.save().then(() => console.log('New working day added!'))
 
@@ -459,76 +461,169 @@ app.post("/new_booking", auth, (req, res) => {
 
     let durationMinutes = durations.find(d => d.type == req.body.type).minutes
 
-    let trainerPhone = ""
-    let trainerPhoto = ""
-    User.findOne({
-        id: req.body.trainerId
-    }).then((data) => {
-        if (!data) { return res.status(401).json({ message: "no trainer with such id" }) }
-        else {
-            trainerPhone = data.phone
-            trainerPhoto = data.trainerPhoto
-        }
-    }).then(() => {
-        let horsePhoto = ""
-        Horse.findOne({
-            id: req.body.horseId
-        }).then((data) => {
-            if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
-            else {
-                horsePhoto = data.photo
-            }
-        }).then(() => {
-            const booking = new Booking({
-                studentId: req.user.id, studentName: req.user.name, studentPhone: req.user.phone, trainerId: req.body.trainerId,
-                trainerName: req.body.trainerName, trainerPhone: trainerPhone, trainerPhoto: trainerPhoto, horseId: req.body.horseId, horseName: req.body.horseName,
-                horsePhoto, date, type: req.body.type, comment: req.body.comment, durationMinutes, isCancelled: false, createdDate: new Date()
-            })
-            booking.save().then(() => console.log('New booking added!'))
+    const booking = new Booking({
+        studentId: req.user.id, trainerId: req.body.trainerId, horseId: req.body.horseId,
+        date, type: req.body.type, comment: req.body.comment, durationMinutes,
+        isCancelled: false, createdDate: new Date()
+    })
+    booking.save().then(() => console.log('New booking added!'))
 
-            res.status(200).json({
-                message: "Booking is added",
-                date: date,
-                accessToken,
-                refreshToken
-            })
-        })
+    res.status(200).json({
+        message: "Booking is added",
+        date: date,
+        accessToken,
+        refreshToken
     })
 })
 
-app.post("/get_all_bookings_student", auth, (req, res) => {
+
+let studentBookingsComplete = data => {
+    let result = []
+
+    data.forEach((el, index) => {
+
+        let doc = el._doc
+        User.findOne({
+            id: doc.trainerId,
+        }).then((trainer) => {
+            doc.trainerName = trainer.name
+            doc.trainerPhone = trainer.phone
+            doc.trainerPhoto = trainer.trainerPhoto
+
+            result.push(doc)
+            if (index == data.length - 1) {
+                
+                result.forEach((el, index) => {
+                    Horse.findOne({
+                        id: el.horseId,
+                    }).then((horse) => {
+                        console.log(horse)
+                        el.horseName = horse.name
+                        el.horsePhoto = horse.photo
+
+                        if (index == result.length - 1) {
+                            return result
+                        }
+                    })
+                })
+            }
+        })
+    })
+}
+
+app.post("/get_current_bookings_student", auth, (req, res) => {
     if (req.user.role != "student") {
         return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
 
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
     Booking.find({
-        studentId: req.user.id
+        studentId: req.user.id,
+        date: {$gte: start}
     }).then((data) => {
         res.status(200).json({
-            bookings: data,
+            bookings: studentBookingsComplete(data),
             accessToken,
             refreshToken
         })
     })
 })
 
-app.post("/get_bookings_trainer", auth, (req, res) => {
+app.post("/get_archived_bookings_student", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
+    Booking.find({
+        studentId: req.user.id,
+        date: {$lt: start}
+    }).then((data) => {
+        res.status(200).json({
+            bookings: studentBookingsComplete(result),
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
+
+let trainerBookingsComplete = data => {
+    let result = []
+
+    data.forEach((el, index) => {
+
+        let doc = el._doc
+        User.findOne({
+            id: doc.studentId,
+        }).then((student) => {
+            doc.name = student.name
+            doc.phone = student.phone
+            doc.userPic = student.userPic
+
+            result.push(doc)
+            if (index == data.length - 1) {
+                
+                result.forEach((el, index) => {
+                    Horse.findOne({
+                        id: el.horseId,
+                    }).then((horse) => {
+                        console.log(horse)
+                        el.horseName = horse.name
+                        el.horsePhoto = horse.photo
+
+                        if (index == result.length - 1) {
+                            return result
+                        }
+                    })
+                })
+            }
+        })
+    })
+}
+
+app.post("/get_current_bookings_trainer", auth, (req, res) => {
     if (req.user.role != "trainer") {
         return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
 
     Booking.find({
-        trainerId: req.user.id
+        trainerId: req.user.id,
+        date: {$gte: start}
     }).then((data) => {
         res.status(200).json({
-            bookings: data,
+            bookings: trainerBookingsComplete(data),
             accessToken,
             refreshToken
         })
     })
 })
+
+app.post("/get_archived_bookings_trainer", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    Booking.find({
+        trainerId: req.user.id,
+        date: {$lt: start}
+    }).then((data) => {
+        res.status(200).json({
+            bookings: trainerBookingsComplete(data),
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
 
 app.post("/today_bookings", auth, (req, res) => {
     if (req.user.role != "trainer") {
@@ -547,14 +642,50 @@ app.post("/today_bookings", auth, (req, res) => {
         date: {$gte: start, $lt: end}
     }).then((data) => {
         res.status(200).json({
-            bookings: data,
+            bookings: trainerBookingsComplete(data),
             accessToken,
             refreshToken
         })
     })
 })
 
-app.post("/get_bookings_horse", auth, (req, res) => {
+
+let adminBookingsComplete = data => {
+    let result = []
+
+    data.forEach((el, index) => {
+
+        let doc = el._doc
+        User.findOne({
+            id: doc.studentId,
+        }).then((student) => {
+            console.log(student)
+            doc.name = student.name
+            doc.phone = student.phone
+            doc.userPic = student.userPic
+
+            result.push(doc)
+            if (index == data.length - 1) {
+                
+                result.forEach((el, index) => {
+                    User.findOne({
+                        id: el.trainerId,
+                    }).then((trainer) => {
+                        doc.trainerName = trainer.name
+                        doc.trainerPhone = trainer.phone
+                        doc.trainerPhoto = trainer.trainerPhoto
+
+                        if (index == result.length - 1) {
+                            return result
+                        }
+                    })
+                })
+            }
+        })
+    })
+}
+
+app.post("/get_bookings_by_horse", auth, (req, res) => {
     if (req.user.role != "admin") {
         return res.status(401).json({ error: "not permitted" })
     }
@@ -564,7 +695,7 @@ app.post("/get_bookings_horse", auth, (req, res) => {
         horseId: req.body.id
     }).then((data) => {
         res.status(200).json({
-            bookings: data,
+            bookings: adminBookingsComplete(data),
             accessToken,
             refreshToken
         })
@@ -608,21 +739,235 @@ app.post("/cancel_booking", auth, (req, res) => {
     })
 })
 
-app.post("/get_available_trainers", auth, (req, res) => {
-    if (req.user.role != "student") {
-        return res.status(401).json({ error: "not permitted" })
-    }
-    let { accessToken, refreshToken } = req.user
 
-    Booking.find({
-        horseId: req.body.id
-    }).then((data) => {
-        res.status(200).json({
-            bookings: data,
-            accessToken,
-            refreshToken
+// app.post("/get_slots_for_booking", auth, (req, res) => {
+//     if (req.user.role != "student") {
+//         return res.status(401).json({ error: "not permitted" })
+//     }
+//     let { accessToken, refreshToken } = req.user
+    
+//     let start = new Date()
+//     start.setHours(0,0,0,0)
+
+//     WorkingDay.find({
+//         type: req.body.type,
+//         date: {$gte: start}
+//     }).then((workingDays) => {
+
+//         let result = []
+//         workingDays.forEach(day => {
+            
+//             let dayDoc = day._doc
+//             getAvailableHorses(dayDoc.date, req.body.type)
+//             dayDoc.horses = []
+
+//             result.push(doc)            
+//         })
+//     })
+// })
+
+app.post("/get_slots_for_booking", (req, res) => {
+
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
+    WorkingDay.find({
+            type: req.body.type,
+            date: {$gte: start}
+        }).lean().then(workingDays => {
+            return workingDays
         })
+        .then(workingDays => {
+            
+            User.find({
+                role: "trainer"
+            }).lean().then(trainers => {
+
+
+                let daysAndTrainers = []
+
+                workingDays.forEach(day => {
+
+                    const trainerI = trainers.findIndex(e => e.id == day.trainerId)
+
+                    let trainerToAdd = {
+                        id: day.trainerId,
+                        name: trainers[trainerI].name,
+                        photo: trainers[trainerI].trainerPhoto,
+                        description: trainers[trainerI].trainerDescription
+                    }
+
+
+                    const i = daysAndTrainers.findIndex(e => e.date.toString() == day.date.toString())
+                    if (i > -1) {
+                        daysAndTrainers[i].availableTrainers.push(trainerToAdd)
+                    } else {
+                        daysAndTrainers.push({
+                            date: day.date,
+                            availableTrainers: [trainerToAdd],
+                            availableHorses: [],
+                            bookings: [],
+                            timeslots: []
+                        })
+                    }
+                })
+                return daysAndTrainers
+            }).then(daysAndTrainers => {
+                Horse.find({
+                    types: req.body.type
+                }).lean().then((horses) => {
+                    return horses
+                }).then(horses => {
+                    HorseUnavailable.find().lean().then(unav => {
+
+                        daysAndTrainers.forEach((day, index) => {
+                    
+                            horses.forEach(horse => {
+                                let add = true
+                                unav.forEach(un => {
+                                    if (horse.id == un.id && un.date.toString() == day.date.toString()) {
+                                        add = false
+                                    }
+                                })
+                                if (add) {
+                                    daysAndTrainers[index].availableHorses.push(horse)
+                                }
+                            })
+    
+                        })
+                        return daysAndTrainers
+                    })
+                    .then(daysAndTrainersAndHorses => {
+
+                        Booking.find({
+                            type: req.body.type,
+                            isCancelled: false,
+                            date: {$gte: start}
+                        }).then((bookings) => {
+
+                            daysAndTrainersAndHorses.forEach((day, index) => {
+                                bookings.forEach(booking => {
+                                    if(booking.date.getDate() == day.date.getDate() &&
+                                        booking.date.getMonth() == day.date.getMonth() &&
+                                        booking.date.getYear() == day.date.getYear()
+                                    ) {
+                                        daysAndTrainersAndHorses[index].bookings.push(booking)
+                                        console.log(booking.date.getHours())
+                                    }
+                                })
+                            })
+
+                            daysAndTrainersAndHorses.forEach((day, index) => {
+                                for (let i = 10; i <= 20; i++) {
+                                    let trainersAtSlot = [...day.availableTrainers]
+                                    let horsesAtSlot = [...day.availableHorses]
+
+                                    let createdBookingI = day.bookings.findIndex(e => e.date.getHours() == i)
+
+                                    if (createdBookingI > -1) {
+                                        let trainerIndexToDelete = 
+                                            trainersAtSlot.findIndex(e => e.id == day.bookings[createdBookingI].trainerId)
+                                            
+                                        trainersAtSlot.splice(trainerIndexToDelete, 1)
+
+                                        
+                                        let horseIndexToDelete = 
+                                        horsesAtSlot.findIndex(e => e.id == day.bookings[createdBookingI].horseId)
+                                            
+                                        horsesAtSlot.splice(horseIndexToDelete, 1)
+                                    }
+
+                                    daysAndTrainersAndHorses[index].timeslots.push({
+                                        time: i,
+                                        isAvailable: trainersAtSlot.length > 0 && horsesAtSlot.length > 0,
+                                        trainersAtSlot,
+                                        horsesAtSlot
+                                    })
+                                }
+                            })
+
+
+                            res.status(200).json({
+                                message: daysAndTrainersAndHorses,
+                                accessToken,
+                                refreshToken
+                            })
+                        })
+                    })
+                })
+            })
     })
+    
 })
+
+app.get("/horses", (req, res) => {
+
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
+    WorkingDay.find({
+            type: "Общая",
+            date: {$gte: start}
+        }).lean().then(workingDays => {
+            return workingDays
+        })
+        .then(workingDays => {
+
+            Horse.find({
+                types: "Общая"
+            }).lean().then((horses) => {
+                return horses
+            })
+            .then(horses => {
+
+                HorseUnavailable.find().lean().then(unav => {
+
+                    User.find({
+                        role: "trainer"
+                    }).lean().then(trainers => {
+                        return trainers
+                    }).then(trainers => {
+
+                        let available = []
+                        workingDays.forEach(day => {
+
+                            
+                            day.horses = []
+                            horses.forEach(horse => {
+                                let add = true
+                                unav.forEach(un => {
+                                    if (horse.id == un.id && un.date.toString() == day.date.toString()) {
+                                        add = false
+                                    }
+                                })
+                                if (add) {
+                                    day.horses.push(horse)
+                                }
+                            })
+
+                            trainers.forEach(trainer => {
+                                if (trainer.id == day.trainerId) {
+                                    day.trainerName = trainer.name
+                                    day.trainerPhoto = trainer.trainerPhoto
+                                    day.trainerDescription = trainer.trainerDescription
+                                }
+                            })
+                            available.push(day)
+                        })
+
+                        let result = []
+
+
+                        res.status(200).json({
+                            message: available,
+                            // accessToken,
+                            // refreshToken
+                        })
+                    })
+                })
+            })
+        })
+})
+
 
 app.listen(3001)

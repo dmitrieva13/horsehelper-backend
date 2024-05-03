@@ -11,7 +11,7 @@ const verifyToken = (req, res, next) => {
     try {
         const accessDecoded = jwt.verify(accessToken, "secret string")
         req.user = {accessToken, refreshToken, id: accessDecoded.id, phone: accessDecoded.phone,
-            role: accessDecoded.role, name: accessDecoded.name}
+            role: accessDecoded.role, name: accessDecoded.name, trainerType: data.trainerType}
     } catch (err) {
         if (err.name == "TokenExpiredError" && !refreshToken) {
             return res.status(401).json({errorMessage: "Token is expired"});
@@ -23,17 +23,16 @@ const verifyToken = (req, res, next) => {
             console.log(refreshDecoded)
             
             accessToken = jwt.sign({
-                id: refreshDecoded.id, phone: refreshDecoded.phone,
-                role: refreshDecoded.role, name: refreshDecoded.name
+                id: refreshDecoded.id, phone: refreshDecoded.phone, role: refreshDecoded.role,
+                name: refreshDecoded.name, trainerType: refreshDecoded.trainerType
             }, "secret string", {expiresIn: "2h"});
             refreshToken = jwt.sign({
-                id: refreshDecoded.id, phone: refreshDecoded.phone, 
-                role: refreshDecoded.role, name: refreshDecoded.name
+                id: refreshDecoded.id, phone: refreshDecoded.phone, role: refreshDecoded.role,
+                name: refreshDecoded.name, trainerType: refreshDecoded.trainerType
             }, "secret string", { expiresIn: '100d' });
-
             
             req.user = { accessToken, refreshToken, id: refreshDecoded.id, phone: refreshDecoded.phone,
-                role: refreshDecoded.role, name: refreshDecoded.name }
+                role: refreshDecoded.role, name: refreshDecoded.name, trainerType: refreshDecoded.trainerType }
         }
         catch (err) {
             return res.status(401).json({errorMessage: "Invalid Token"});
