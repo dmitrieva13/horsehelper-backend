@@ -861,11 +861,11 @@ app.post("/get_slots_for_booking", auth, (req, res) => {
                             })
 
                             daysAndTrainersAndHorses.forEach((day, index) => {
-                                for (let i = 7; i <= 17; i++) {
+                                for (let i = 10; i <= 20; i++) {
                                     let trainersAtSlot = [...day.availableTrainers]
                                     let horsesAtSlot = [...day.availableHorses]
 
-                                    let createdBookingI = day.bookings.findIndex(e => e.date.getUTCHours() == i)
+                                    let createdBookingI = day.bookings.findIndex(e => e.date.getUTCHours() + 3 == i)
 
                                     if (createdBookingI > -1) {
                                         let trainerIndexToDelete = 
