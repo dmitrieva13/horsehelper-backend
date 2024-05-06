@@ -24,6 +24,8 @@ const Booking = require("./models/Booking.js");
 
 // Middleware
 const auth = require("./middleware/auth");
+const TrainerNotification = require("./models/TrainerNotification.js");
+const StudentsList = require("./models/StudentsList.js");
 
 const cyrillicToTranslit = new ctt();
 
@@ -143,6 +145,11 @@ app.post("/register_trainer", auth, (req, res) => {
                 trainerDescription: req.body.trainerDescription, trainerType: req.body.trainerType
             })
             user.save().then(() => console.log('Trainer added!'))
+
+            const studentsList = new StudentsList({
+                trainerId: newId, students: []
+            })
+            studentsList.save().then(() => console.log("Students list created!"))
           
             res.status(200).json({
                 message: "New trainer added",
@@ -361,15 +368,26 @@ app.post("/undo_working_day", auth, (req, res) => {
     WorkingDay.deleteOne({
         trainerId: req.user.id, date
     }).then((data) => {
-        console.log(data)
-        if (data.deletedCount == 0) { return res.status(401).json({ message: "no such entry" }) }
-        else {
+        if (data.deletedCount == 0) {
+            return res.status(401).json({ message: "no such entry" })
+        }
+        return data
+    }).then(data => {
+        Booking.updateMany({
+            trainerId: req.user.id,
+            date
+        }, {
+            $set: {
+                isCancelled: true,
+            }
+        }).then(result => {
+            console.log(result)
             res.status(200).json({
-                message: "Working day was removed",
+                message: "Working day was removed.",
                 accessToken,
                 refreshToken
             })
-        }
+        })
     })
 })
 
@@ -466,50 +484,26 @@ app.post("/new_booking", auth, (req, res) => {
         date, type: req.body.type, comment: req.body.comment, durationMinutes,
         isCancelled: false, createdDate: new Date()
     })
-    booking.save().then(() => console.log('New booking added!'))
+    booking.save().then(book => {
+        console.log("New booking added!")
 
-    res.status(200).json({
-        message: "Booking is added",
-        date: date,
-        accessToken,
-        refreshToken
-    })
-})
+        const notification = new TrainerNotification({
+            bookingId: book._id,
+            type: "new",
+            trainerId: req.body.trainerId,
+            dateCreated: new Date()
+        })
+        notification.save().then(() => {
 
-
-let studentBookingsComplete = data => {
-    let result = []
-
-    data.forEach((el, index) => {
-
-        let doc = el._doc
-        User.findOne({
-            id: doc.trainerId,
-        }).then((trainer) => {
-            doc.trainerName = trainer.name
-            doc.trainerPhone = trainer.phone
-            doc.trainerPhoto = trainer.trainerPhoto
-
-            result.push(doc)
-            if (index == data.length - 1) {
-                
-                result.forEach((el, index) => {
-                    Horse.findOne({
-                        id: el.horseId,
-                    }).then((horse) => {
-                        console.log(horse)
-                        el.horseName = horse.name
-                        el.horsePhoto = horse.photo
-
-                        if (index == result.length - 1) {
-                            return result
-                        }
-                    })
-                })
-            }
+            res.status(200).json({
+                message: "Booking is added",
+                date: date,
+                accessToken,
+                refreshToken
+            })
         })
     })
-}
+})
 
 app.post("/get_current_bookings_student", auth, (req, res) => {
     if (req.user.role != "student") {
@@ -522,12 +516,45 @@ app.post("/get_current_bookings_student", auth, (req, res) => {
 
     Booking.find({
         studentId: req.user.id,
-        date: {$gte: start}
-    }).then((data) => {
-        res.status(200).json({
-            bookings: studentBookingsComplete(data),
-            accessToken,
-            refreshToken
+        date: {$gte: start},
+        isCancelled: false
+    }).then(bookings => {
+
+        var result = []
+
+        User.find({
+            role: "trainer"
+        }).then(trainers => {
+            Horse.find().then(horses => {
+
+                bookings.forEach((booking) => {
+                    let bookingComplete = booking._doc
+
+                    let trainerI = trainers.findIndex(t => t.id == booking.trainerId)
+                    let trainer
+                    if (trainerI > -1) {
+                        trainer = trainers[trainerI]
+                        bookingComplete.trainerName = trainer.name
+                        bookingComplete.trainerPhone = trainer.phone
+                        bookingComplete.trainerPhoto = trainer.trainerPhoto
+                    }
+
+                    let horseI = horses.findIndex(h => h.id == booking.horseId)
+                    let horse
+                    if (horseI > -1) {
+                        horse = horses[horseI]
+                        bookingComplete.horseName = horse.name
+                        bookingComplete.horsePhoto = horse.photo
+                    }
+                    result.push(bookingComplete)
+                })
+
+                res.status(200).json({
+                    bookings: result,
+                    accessToken,
+                    refreshToken
+                })
+            })
         })
     })
 })
@@ -541,52 +568,49 @@ app.post("/get_archived_bookings_student", auth, (req, res) => {
     let start = new Date()
     start.setHours(0,0,0,0)
 
-    Booking.find({
-        studentId: req.user.id,
-        date: {$lt: start}
-    }).then((data) => {
-        res.status(200).json({
-            bookings: studentBookingsComplete(result),
-            accessToken,
-            refreshToken
+    Booking.find({$or: [{studentId: req.user.id, date: {$lt: start}},
+        {studentId: req.user.id, isCancelled: true}
+    ]}).then(bookings => {
+
+        var result = []
+
+        User.find({
+            role: "trainer"
+        }).then(trainers => {
+            Horse.find().then(horses => {
+
+                bookings.forEach((booking) => {
+                    let bookingComplete = booking._doc
+
+                    let trainerI = trainers.findIndex(t => t.id == booking.trainerId)
+                    let trainer
+                    if (trainerI > -1) {
+                        trainer = trainers[trainerI]
+                        bookingComplete.trainerName = trainer.name
+                        bookingComplete.trainerPhone = trainer.phone
+                        bookingComplete.trainerPhoto = trainer.trainerPhoto
+                    }
+
+                    let horseI = horses.findIndex(h => h.id == booking.horseId)
+                    let horse
+                    if (horseI > -1) {
+                        horse = horses[horseI]
+                        bookingComplete.horseName = horse.name
+                        bookingComplete.horsePhoto = horse.photo
+                    }
+                    result.push(bookingComplete)
+                })
+
+                res.status(200).json({
+                    bookings: result,
+                    accessToken,
+                    refreshToken
+                })
+            })
         })
     })
 })
 
-
-let trainerBookingsComplete = data => {
-    let result = []
-
-    data.forEach((el, index) => {
-
-        let doc = el._doc
-        User.findOne({
-            id: doc.studentId,
-        }).then((student) => {
-            doc.name = student.name
-            doc.phone = student.phone
-            doc.userPic = student.userPic
-
-            result.push(doc)
-            if (index == data.length - 1) {
-                
-                result.forEach((el, index) => {
-                    Horse.findOne({
-                        id: el.horseId,
-                    }).then((horse) => {
-                        console.log(horse)
-                        el.horseName = horse.name
-                        el.horsePhoto = horse.photo
-
-                        if (index == result.length - 1) {
-                            return result
-                        }
-                    })
-                })
-            }
-        })
-    })
-}
 
 app.post("/get_current_bookings_trainer", auth, (req, res) => {
     if (req.user.role != "trainer") {
@@ -594,32 +618,99 @@ app.post("/get_current_bookings_trainer", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
 
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
     Booking.find({
         trainerId: req.user.id,
-        date: {$gte: start}
-    }).then((data) => {
-        res.status(200).json({
-            bookings: trainerBookingsComplete(data),
-            accessToken,
-            refreshToken
+        date: {$gte: start},
+        isCancelled: false
+    }).then(bookings => {
+        var result = []
+
+        User.find({
+            role: "student"
+        }).then(students => {
+            Horse.find().then(horses => {
+                bookings.forEach((booking) => {
+                    let bookingComplete = booking._doc
+
+                    let studentI = students.findIndex(s => s.id == booking.studentId)
+                    let student
+                    if (studentI > -1) {
+                        student = students[studentI]
+                        bookingComplete.name = student.name
+                        bookingComplete.phone = student.phone
+                        bookingComplete.userPic = student.userPic
+                    }
+
+                    let horseI = horses.findIndex(h => h.id == booking.horseId)
+                    let horse
+                    if (horseI > -1) {
+                        horse = horses[horseI]
+                        bookingComplete.horseName = horse.name
+                        bookingComplete.horsePhoto = horse.photo
+                    }
+                    result.push(bookingComplete)
+                })
+
+                res.status(200).json({
+                    bookings: result,
+                    accessToken,
+                    refreshToken
+                })
+            })
         })
     })
 })
 
 app.post("/get_archived_bookings_trainer", auth, (req, res) => {
+
     if (req.user.role != "trainer") {
         return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
 
-    Booking.find({
-        trainerId: req.user.id,
-        date: {$lt: start}
-    }).then((data) => {
-        res.status(200).json({
-            bookings: trainerBookingsComplete(data),
-            accessToken,
-            refreshToken
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
+    Booking.find({$or: [{isCancelled: true, trainerId: req.user.id},
+            {trainerId: req.user.id, date: {$lt: start}}
+        ]}).then(bookings => {
+        var result = []
+
+        User.find({
+            role: "student"
+        }).then(students => {
+            Horse.find().then(horses => {
+                bookings.forEach((booking) => {
+                    let bookingComplete = booking._doc
+
+                    let studentI = students.findIndex(s => s.id == booking.studentId)
+                    let student
+                    if (studentI > -1) {
+                        student = students[studentI]
+                        bookingComplete.name = student.name
+                        bookingComplete.phone = student.phone
+                        bookingComplete.userPic = student.userPic
+                    }
+
+                    let horseI = horses.findIndex(h => h.id == booking.horseId)
+                    let horse
+                    if (horseI > -1) {
+                        horse = horses[horseI]
+                        bookingComplete.horseName = horse.name
+                        bookingComplete.horsePhoto = horse.photo
+                    }
+                    result.push(bookingComplete)
+                })
+
+                res.status(200).json({
+                    bookings: result,
+                    accessToken,
+                    refreshToken
+                })
+            })
         })
     })
 })
@@ -635,69 +726,104 @@ app.post("/today_bookings", auth, (req, res) => {
     start.setHours(0,0,0,0)
 
     let end = new Date()
-    end.setHours(23,59,59,999)
+    end.setHours(23,59,99,99)
 
     Booking.find({
         trainerId: req.user.id,
-        date: {$gte: start, $lt: end}
-    }).then((data) => {
-        res.status(200).json({
-            bookings: trainerBookingsComplete(data),
-            accessToken,
-            refreshToken
+        date: {$gte: start, $lt: end},
+        isCancelled: false
+    }).then(bookings => {
+        var result = []
+
+        User.find({
+            role: "student"
+        }).then(students => {
+            Horse.find().then(horses => {
+                bookings.forEach((booking) => {
+                    let bookingComplete = booking._doc
+
+                    let studentI = students.findIndex(s => s.id == booking.studentId)
+                    let student
+                    if (studentI > -1) {
+                        student = students[studentI]
+                        bookingComplete.name = student.name
+                        bookingComplete.phone = student.phone
+                        bookingComplete.userPic = student.userPic
+                    }
+
+                    let horseI = horses.findIndex(h => h.id == booking.horseId)
+                    let horse
+                    if (horseI > -1) {
+                        horse = horses[horseI]
+                        bookingComplete.horseName = horse.name
+                        bookingComplete.horsePhoto = horse.photo
+                    }
+                    result.push(bookingComplete)
+                })
+
+                res.status(200).json({
+                    bookings: result,
+                    accessToken,
+                    refreshToken
+                })
+            })
         })
     })
 })
 
-
-let adminBookingsComplete = data => {
-    let result = []
-
-    data.forEach((el, index) => {
-
-        let doc = el._doc
-        User.findOne({
-            id: doc.studentId,
-        }).then((student) => {
-            console.log(student)
-            doc.name = student.name
-            doc.phone = student.phone
-            doc.userPic = student.userPic
-
-            result.push(doc)
-            if (index == data.length - 1) {
-                
-                result.forEach((el, index) => {
-                    User.findOne({
-                        id: el.trainerId,
-                    }).then((trainer) => {
-                        doc.trainerName = trainer.name
-                        doc.trainerPhone = trainer.phone
-                        doc.trainerPhoto = trainer.trainerPhoto
-
-                        if (index == result.length - 1) {
-                            return result
-                        }
-                    })
-                })
-            }
-        })
-    })
-}
 
 app.post("/get_bookings_by_horse", auth, (req, res) => {
     if (req.user.role != "admin") {
         return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
+    
+    let start = new Date()
+    start.setHours(0,0,0,0)
 
     Booking.find({
-        horseId: req.body.id
-    }).then((data) => {
-        res.status(200).json({
-            bookings: adminBookingsComplete(data),
-            accessToken,
-            refreshToken
+        horseId: req.body.id,
+        date: {$gte: start},
+        isCancelled: false
+    }).then((bookings) => {
+        var result = []
+        
+        User.find({
+            role: "student"
+        }).then((students) => {
+            User.find({
+                role: "trainer"
+            }).then((trainers) => {
+                bookings.forEach((booking) => {
+                    let bookingComplete = booking._doc
+
+                    let studentI = students.findIndex(s => s.id == booking.studentId)
+                    let student
+                    if (studentI > -1) {
+                        student = students[studentI]
+                        bookingComplete.name = student.name
+                        bookingComplete.phone = student.phone
+                        bookingComplete.userPic = student.userPic
+                    }
+
+                    let trainerI = trainers.findIndex(t => t.id == booking.trainerId)
+                    let trainer
+                    if (trainerI > -1) {
+                        trainer = trainers[trainerI]
+                        bookingComplete.trainerName = trainer.name
+                        bookingComplete.trainerPhone = trainer.phone
+                        bookingComplete.trainerPhoto = trainer.trainerPhoto
+                    }
+                    console.log(bookingComplete)
+                    result.push(bookingComplete)
+                })
+
+                res.status(200).json({
+                    bookings: result,
+                    accessToken,
+                    refreshToken
+                })
+            })
         })
     })
 })
@@ -715,56 +841,46 @@ app.post("/cancel_booking", auth, (req, res) => {
     catch(e){
         return res.status(401).json({ message: "date is wrong" })
     }
+
+    let book
     
-    Booking.updateOne({
+    Booking.findOneAndUpdate({
         studentId: req.user.id,
         trainerId: req.body.trainerId,
         horseId: req.body.horseId,
-        date
+        date,
+        isCancelled: false
     },
     {
         $set: {
             isCancelled: true
         }
+    },
+    {
+        lean: true
     }).then((data) => {
-        console.log(data)
-        if (data.deletedCount == 0) { return res.status(401).json({ message: "no such entry" }) }
-        else {
+        if (!data || data == null) {
+            return res.status(401).json({ message: "no such entry" }) 
+        }
+        book = data
+
+        const notification = new TrainerNotification({
+            bookingId: book._id,
+            type: "canceled",
+            trainerId: req.body.trainerId,
+            dateCreated: new Date()
+        })
+        notification.save().then(() => {
+        
             res.status(200).json({
-                message: "Booking was cancelled",
+                message: "Booking was canceled",
                 accessToken,
                 refreshToken
             })
-        }
+        })
     })
 })
 
-
-// app.post("/get_slots_for_booking", auth, (req, res) => {
-//     if (req.user.role != "student") {
-//         return res.status(401).json({ error: "not permitted" })
-//     }
-//     let { accessToken, refreshToken } = req.user
-    
-//     let start = new Date()
-//     start.setHours(0,0,0,0)
-
-//     WorkingDay.find({
-//         type: req.body.type,
-//         date: {$gte: start}
-//     }).then((workingDays) => {
-
-//         let result = []
-//         workingDays.forEach(day => {
-            
-//             let dayDoc = day._doc
-//             getAvailableHorses(dayDoc.date, req.body.type)
-//             dayDoc.horses = []
-
-//             result.push(doc)            
-//         })
-//     })
-// })
 
 app.post("/get_slots_for_booking", auth, (req, res) => {
     if (req.user.role != "student") {
@@ -776,129 +892,232 @@ app.post("/get_slots_for_booking", auth, (req, res) => {
     start.setHours(0,0,0,0)
 
     WorkingDay.find({
-            type: req.body.type,
-            date: {$gte: start}
-        }).lean().then(workingDays => {
-            return workingDays
-        })
-        .then(workingDays => {
-            
-            User.find({
-                role: "trainer"
-            }).lean().then(trainers => {
+        type: req.body.type,
+        date: {$gte: start}
+    }).lean()
+    .then(workingDays => {
+        
+        User.find({
+            role: "trainer"
+        }).lean().then(trainers => {
 
 
-                let daysAndTrainers = []
+            let daysAndTrainers = []
 
-                workingDays.forEach(day => {
+            workingDays.forEach(day => {
 
-                    const trainerI = trainers.findIndex(e => e.id == day.trainerId)
+                const trainerI = trainers.findIndex(e => e.id == day.trainerId)
 
-                    let trainerToAdd = {
-                        id: day.trainerId,
-                        name: trainers[trainerI].name,
-                        photo: trainers[trainerI].trainerPhoto,
-                        description: trainers[trainerI].trainerDescription
-                    }
+                let trainerToAdd = {
+                    id: day.trainerId,
+                    name: trainers[trainerI].name,
+                    photo: trainers[trainerI].trainerPhoto,
+                    description: trainers[trainerI].trainerDescription
+                }
 
-
-                    const i = daysAndTrainers.findIndex(e => e.date.toString() == day.date.toString())
-                    if (i > -1) {
-                        daysAndTrainers[i].availableTrainers.push(trainerToAdd)
-                    } else {
-                        daysAndTrainers.push({
-                            date: day.date,
-                            availableTrainers: [trainerToAdd],
-                            availableHorses: [],
-                            bookings: [],
-                            timeslots: []
-                        })
-                    }
-                })
-                return daysAndTrainers
-            }).then(daysAndTrainers => {
-                Horse.find({
-                    types: req.body.type
-                }).lean().then((horses) => {
-                    return horses
-                }).then(horses => {
-                    HorseUnavailable.find().lean().then(unav => {
-
-                        daysAndTrainers.forEach((day, index) => {
-                    
-                            horses.forEach(horse => {
-                                let add = true
-                                unav.forEach(un => {
-                                    if (horse.id == un.id && un.date.toString() == day.date.toString()) {
-                                        add = false
-                                    }
-                                })
-                                if (add) {
-                                    daysAndTrainers[index].availableHorses.push(horse)
-                                }
-                            })
-    
-                        })
-                        return daysAndTrainers
+                const i = daysAndTrainers.findIndex(e => e.date.toString() == day.date.toString())
+                if (i > -1) {
+                    daysAndTrainers[i].availableTrainers.push(trainerToAdd)
+                } else {
+                    daysAndTrainers.push({
+                        date: day.date,
+                        availableTrainers: [trainerToAdd],
+                        availableHorses: [],
+                        bookings: [],
+                        timeslots: []
                     })
-                    .then(daysAndTrainersAndHorses => {
+                }
+            })
+            return daysAndTrainers
+        }).then(daysAndTrainers => {
+            Horse.find({
+                types: req.body.type
+            }).lean().then((horses) => {
+                return horses
+            }).then(horses => {
+                HorseUnavailable.find().lean().then(unav => {
 
-                        Booking.find({
-                            type: req.body.type,
-                            isCancelled: false,
-                            date: {$gte: start}
-                        }).then((bookings) => {
-
-                            daysAndTrainersAndHorses.forEach((day, index) => {
-                                bookings.forEach(booking => {
-                                    if(booking.date.getDate() == day.date.getDate() &&
-                                        booking.date.getMonth() == day.date.getMonth() &&
-                                        booking.date.getYear() == day.date.getYear()
-                                    ) {
-                                        daysAndTrainersAndHorses[index].bookings.push(booking)
-                                    }
-                                })
-                            })
-
-                            daysAndTrainersAndHorses.forEach((day, index) => {
-                                for (let i = 10; i <= 20; i++) {
-                                    let trainersAtSlot = [...day.availableTrainers]
-                                    let horsesAtSlot = [...day.availableHorses]
-
-                                    let createdBookingI = day.bookings.findIndex(e => e.date.getUTCHours() + 3 == i)
-
-                                    if (createdBookingI > -1) {
-                                        let trainerIndexToDelete = 
-                                            trainersAtSlot.findIndex(e => e.id == day.bookings[createdBookingI].trainerId)
-                                            
-                                        trainersAtSlot.splice(trainerIndexToDelete, 1)
-
-                                        
-                                        let horseIndexToDelete = 
-                                        horsesAtSlot.findIndex(e => e.id == day.bookings[createdBookingI].horseId)
-                                            
-                                        horsesAtSlot.splice(horseIndexToDelete, 1)
-                                    }
-
-                                    daysAndTrainersAndHorses[index].timeslots.push({
-                                        time: i,
-                                        isAvailable: trainersAtSlot.length > 0 && horsesAtSlot.length > 0,
-                                        trainersAtSlot,
-                                        horsesAtSlot
-                                    })
+                    daysAndTrainers.forEach((day, index) => {
+                
+                        horses.forEach(horse => {
+                            let add = true
+                            unav.forEach(un => {
+                                if (horse.id == un.id && un.date.toString() == day.date.toString()) {
+                                    add = false
                                 }
                             })
+                            if (add) {
+                                daysAndTrainers[index].availableHorses.push(horse)
+                            }
+                        })
 
-                            res.status(200).json({
-                                message: daysAndTrainersAndHorses,
-                                accessToken,
-                                refreshToken
+                    })
+                    return daysAndTrainers
+                })
+                .then(daysAndTrainersAndHorses => {
+
+                    Booking.find({
+                        type: req.body.type,
+                        isCancelled: false,
+                        date: {$gte: start}
+                    }).then((bookings) => {
+
+                        daysAndTrainersAndHorses.forEach((day, index) => {
+                            bookings.forEach(booking => {
+                                if(booking.date.getDate() == day.date.getDate() &&
+                                    booking.date.getMonth() == day.date.getMonth() &&
+                                    booking.date.getYear() == day.date.getYear()
+                                ) {
+                                    daysAndTrainersAndHorses[index].bookings.push(booking)
+                                }
                             })
+                        })
+
+                        daysAndTrainersAndHorses.forEach((day, index) => {
+                            for (let i = 10; i <= 20; i++) {
+                                let trainersAtSlot = [...day.availableTrainers]
+                                let horsesAtSlot = [...day.availableHorses]
+
+                                let createdBookingI = day.bookings.findIndex(e => e.date.getUTCHours() + 3 == i)
+
+                                if (createdBookingI > -1) {
+                                    let trainerIndexToDelete = 
+                                        trainersAtSlot.findIndex(e => e.id == day.bookings[createdBookingI].trainerId)
+                                        
+                                    trainersAtSlot.splice(trainerIndexToDelete, 1)
+
+                                    
+                                    let horseIndexToDelete = 
+                                    horsesAtSlot.findIndex(e => e.id == day.bookings[createdBookingI].horseId)
+                                        
+                                    horsesAtSlot.splice(horseIndexToDelete, 1)
+                                }
+
+                                daysAndTrainersAndHorses[index].timeslots.push({
+                                    time: i,
+                                    isAvailable: trainersAtSlot.length > 0 && horsesAtSlot.length > 0,
+                                    trainersAtSlot,
+                                    horsesAtSlot
+                                })
+                            }
+                        })
+
+                        res.status(200).json({
+                            message: daysAndTrainersAndHorses,
+                            accessToken,
+                            refreshToken
                         })
                     })
                 })
             })
+        })
     })
 })
+
+
+app.post("/trainer_notifications", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    let monthAgo = new Date()
+    monthAgo.setMonth(monthAgo.getMonth() - 1)
+
+    TrainerNotification.find({
+        trainerId: req.user.id,
+        isRead: false
+    }).then(notifications => {
+        Booking.find({
+            trainerId: req.user.id,
+            createdDate: {$gte: monthAgo}
+        }).then(bookings => {
+            var result = []
+
+            notifications.forEach((n, i) => {
+                let notificationComplete = n._doc
+
+                console.log(bookings)
+                let bookingIndex = bookings.findIndex(e => e._id == n.bookingId)
+                
+                if(bookingIndex > -1) {
+                    notificationComplete.booking = bookings[bookingIndex]
+                    console.log("found")
+                }
+                result.push(notificationComplete)
+            })
+
+            console.log(result)
+
+            res.status(200).json({
+                notifications: result,
+                accessToken,
+                refreshToken
+            })
+        })
+    })
+})
+
+app.post("/read_trainer_notifications", auth, (req, res) => {
+    if (req.user.role != "trainer") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    TrainerNotification.updateMany({
+        trainerId: req.user.id,
+        isRead: false
+    },
+    {
+        $set: {
+            isRead: true
+        }
+    }).then(() => {
+            res.status(200).json({
+                message: "Trainer notifications are read",
+                accessToken,
+                refreshToken
+            })
+    })
+})
+
+app.post("/student_notifications", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    let start = new Date()
+
+    let end = new Date()
+    end.setHours(end.getHours() + 24)
+
+    Booking.find({
+        studentId: req.user.id,
+        date: {$gte: start, $lt: end},
+        isCancelled: false
+    }).then((bookings) => {
+        res.status(200).json({
+            notifications: bookings,
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
+app.post("/get_students_list", (req, res) => {
+    Booking.find({
+        studentId: req.user.id,
+        date: {$gte: start, $lt: end},
+        isCancelled: false
+    }).then((bookings) => {
+        res.status(200).json({
+            notifications: bookings,
+            accessToken,
+            refreshToken
+        })
+    })
+})
+
 
 app.listen(3001)
