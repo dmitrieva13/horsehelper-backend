@@ -9,7 +9,7 @@ const verifyToken = (req, res, next) => {
     }
   
     try {
-        const accessDecoded = jwt.verify(accessToken, "secret string")
+        const accessDecoded = jwt.verify(accessToken, process.env.TOKEN_STRING || "secret string")
         req.user = {accessToken, refreshToken, id: accessDecoded.id, phone: accessDecoded.phone,
             role: accessDecoded.role, name: accessDecoded.name, trainerType: accessDecoded.trainerType}
     } catch (err) {
@@ -18,18 +18,18 @@ const verifyToken = (req, res, next) => {
         }
         
         try {
-            const refreshDecoded = jwt.verify(refreshToken, "secret string")
+            const refreshDecoded = jwt.verify(refreshToken, process.env.TOKEN_STRING || "secret string")
             console.log("refreshing both")
             console.log(refreshDecoded)
             
             accessToken = jwt.sign({
                 id: refreshDecoded.id, phone: refreshDecoded.phone, role: refreshDecoded.role,
                 name: refreshDecoded.name, trainerType: refreshDecoded.trainerType
-            }, "secret string", {expiresIn: "2h"});
+            }, process.env.TOKEN_STRING || "secret string", {expiresIn: 30});
             refreshToken = jwt.sign({
                 id: refreshDecoded.id, phone: refreshDecoded.phone, role: refreshDecoded.role,
                 name: refreshDecoded.name, trainerType: refreshDecoded.trainerType
-            }, "secret string", { expiresIn: '100d' });
+            }, process.env.TOKEN_STRING || "secret string", { expiresIn: '100d' });
             
             req.user = { accessToken, refreshToken, id: refreshDecoded.id, phone: refreshDecoded.phone,
                 role: refreshDecoded.role, name: refreshDecoded.name, trainerType: refreshDecoded.trainerType }

@@ -1,9 +1,12 @@
 const   cors        = require("cors"),
+        dotenv      = require('dotenv'),
+        bcrypt      = require('bcrypt'),
         express     = require("express"),
         mongoose    = require("mongoose"),
         bodyParser  = require("body-parser"),
         jwt         = require("jsonwebtoken")
         ctt         = require("cyrillic-to-translit-js");
+
         
 
 const app = express()
@@ -13,6 +16,8 @@ app.use(bodyParser.json())
 
 var corsOptions = { origin: '*', optionsSuccessStatus: 200 }
 app.use(cors(corsOptions));  
+
+dotenv.config();
 
 mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
 const User = require("./models/User.js")
@@ -28,6 +33,26 @@ const TrainerNotification = require("./models/TrainerNotification.js");
 const StudentsList = require("./models/StudentsList.js");
 
 const cyrillicToTranslit = new ctt();
+
+let cryptPassword = function(password, callback) {
+    bcrypt.genSalt(10, function(err, salt) {
+        if (err) 
+            return callback(err)
+    
+        bcrypt.hash(password, salt, function(err, hash) {
+            return callback(err, hash)
+        })
+    })
+}
+
+let comparePassword = function(plainPass, hashword, callback) {
+    bcrypt.compare(plainPass, hashword, function(err, isPasswordMatch) {  
+        // console.log(err) 
+        return err == null ?
+            callback(null, isPasswordMatch) :
+            callback(err);
+    });
+};
 
 
 const durations = [{
@@ -55,7 +80,6 @@ app.post("/register", (req, res) => {
     User.findOne({
         phone: req.body.phone
     }).then((data) => {
-        // phone is already registered
         if (data) { return res.status(401).json({ message: "user is already registered" }) }
         else {
 
@@ -66,22 +90,31 @@ app.post("/register", (req, res) => {
 
             let newId = Math.floor(Math.random() * 9000000) + 1000000
             const accessToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name },
-                "secret string", {expiresIn: "2h"}
+                process.env.TOKEN_STRING || "secret string", {expiresIn: 30}
             );
             const refreshToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name }, 
-                "secret string", { expiresIn: '100d' }
+                process.env.TOKEN_STRING || "secret string", { expiresIn: '100d' }
             );
 
-            const user = new User({
-                phone: req.body.phone, password: req.body.password, id: newId, role, name: req.body.name
+            let password
+            cryptPassword(req.body.password, (err, hash) => {
+                password = hash
+
+                const user = new User({
+                    phone: req.body.phone, password, id: newId, role, name: req.body.name
+                })
+                user.save().then(user => {
+                    console.log('User added!')
+                    console.log(user)
+                    res.status(200).json({
+                        message: "New User added!",
+                        accessToken,
+                        refreshToken
+                    })
+                })
             })
-            user.save().then(() => console.log('User added!'))
-          
-            res.status(200).json({
-                message: "New User added!",
-                accessToken,
-                refreshToken
-            })
+
+            
         }
     })
 })
@@ -90,30 +123,30 @@ app.post("/login", (req, res) => {
     User.findOne({
         phone: req.body.phone
     }).then((data) => {
-        console.log(data)
-        // No user found
         if (!data) { res.sendStatus(404) }
         else {
-            if (req.body.password != data.password) {
-                return res.status(401).json({ message: "wrong password" })
-            }
+            comparePassword(req.body.password, data.password, (err, passed) => {
+                if (!passed || err) {
+                    return res.status(401).json({ message: "wrong password" })
+                }
 
-            const accessToken = jwt.sign(
-                { id: data.id, phone: data.phone, role: data.role, name: data.name,
-                    trainerType: data.trainerType },
-                "secret string", {expiresIn: "2h"}
-            );
-          
-            const refreshToken = jwt.sign(
-                { id: data.id, phone: data.phone, role: data.role, name: data.name,
-                    trainerType: data.trainerType }, 
-                "secret string", { expiresIn: '100d' }
-            );
-          
-            res.status(200).json({
-                message: "User logged in",
-                accessToken,
-                refreshToken
+                const accessToken = jwt.sign(
+                    { id: data.id, phone: data.phone, role: data.role, name: data.name,
+                        trainerType: data.trainerType },
+                        process.env.TOKEN_STRING || "secret string", {expiresIn: 30}
+                );
+            
+                const refreshToken = jwt.sign(
+                    { id: data.id, phone: data.phone, role: data.role, name: data.name,
+                        trainerType: data.trainerType }, 
+                        process.env.TOKEN_STRING || "secret string", { expiresIn: '100d' }
+                );
+            
+                res.status(200).json({
+                    message: "User logged in",
+                    accessToken,
+                    refreshToken
+                })
             })
         }
     })
@@ -537,6 +570,8 @@ app.post("/get_current_bookings_student", auth, (req, res) => {
                         bookingComplete.trainerName = trainer.name
                         bookingComplete.trainerPhone = trainer.phone
                         bookingComplete.trainerPhoto = trainer.trainerPhoto
+                        bookingComplete.trainerType = trainer.trainerType
+                        bookingComplete.trainerDescription = trainer.trainerDescription
                     }
 
                     let horseI = horses.findIndex(h => h.id == booking.horseId)
@@ -545,6 +580,8 @@ app.post("/get_current_bookings_student", auth, (req, res) => {
                         horse = horses[horseI]
                         bookingComplete.horseName = horse.name
                         bookingComplete.horsePhoto = horse.photo
+                        bookingComplete.horseTypes = horse.types
+                        bookingComplete.horseDescription = horse.description
                     }
                     result.push(bookingComplete)
                 })
@@ -828,6 +865,76 @@ app.post("/get_bookings_by_horse", auth, (req, res) => {
     })
 })
 
+app.post("/get_all_bookings", auth, (req, res) => {
+    if (req.user.role != "admin") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+    
+    let start = new Date()
+    start.setHours(0,0,0,0)
+
+    Booking.find({
+        date: {$gte: start},
+        isCancelled: false
+    }).then((bookings) => {
+        var result = []
+        
+        User.find({
+            role: "student"
+        }).then((students) => {
+            User.find({
+                role: "trainer"
+            }).then((trainers) => {
+                Horses.find({}).then(horses => {
+                    bookings.forEach((booking) => {
+                        let bookingComplete = booking._doc
+
+                        let studentI = students.findIndex(s => s.id == booking.studentId)
+                        let student
+                        if (studentI > -1) {
+                            student = students[studentI]
+                            bookingComplete.name = student.name
+                            bookingComplete.phone = student.phone
+                            bookingComplete.userPic = student.userPic
+                            bookingComplete.studentId = student.id
+                        }
+
+                        let trainerI = trainers.findIndex(t => t.id == booking.trainerId)
+                        let trainer
+                        if (trainerI > -1) {
+                            trainer = trainers[trainerI]
+                            bookingComplete.trainerName = trainer.name
+                            bookingComplete.trainerPhone = trainer.phone
+                            bookingComplete.trainerPhoto = trainer.trainerPhoto
+                            bookingComplete.trainerId = trainer.id
+                        }
+
+                        let horseI = horses.findIndex(h => h.id == booking.horseId)
+                        let horse
+                        if (horseI > -1) {
+                            horse = horses[horseI]
+                            bookingComplete.horseId = horse.id
+                            bookingComplete.horseName = horse.name
+                            bookingComplete.horsePhoto = horse.photo
+                        }
+
+                        console.log(bookingComplete)
+                        result.push(bookingComplete)
+                    })
+                    
+                    res.status(200).json({
+                        bookings: result,
+                        accessToken,
+                        refreshToken
+                    })
+                })
+            })
+        })
+    })
+})
+
+
 app.post("/cancel_booking", auth, (req, res) => {
     if (req.user.role != "student") {
         return res.status(401).json({ error: "not permitted" })
@@ -1087,6 +1194,7 @@ app.post("/student_notifications", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
 
+    
     let start = new Date()
 
     let end = new Date()
@@ -1106,13 +1214,78 @@ app.post("/student_notifications", auth, (req, res) => {
 })
 
 app.post("/get_students_list", (req, res) => {
-    Booking.find({
-        studentId: req.user.id,
-        date: {$gte: start, $lt: end},
-        isCancelled: false
-    }).then((bookings) => {
+    StudentsList.findOne({
+        trainerId: req.body.trainerId
+    }).then(studentList => {
+        
+        User.find({
+            role: "student"
+        }).then(students => {
+            
+            let result = []
+            if (studentList) {
+                studentList.students.forEach(student => {
+                    studentComplete = {
+                        studentId: student
+                    }
+
+                    let studentI = students.findIndex(s => s.id == student)
+                    if (studentI > -1) {
+                        studentComplete.name = students[studentI].name
+                        studentComplete.userPic = students[studentI].userPic
+                    }
+
+                    result.push(studentComplete)
+                })
+            }
+
+            res.status(200).json({
+                studentsList: result
+            })
+        })
+    })
+})
+
+app.post("/add_student_list", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    StudentsList.findOne({
+        trainerId: req.body.trainerId
+    }).then(studentList => {
+        if (studentList.students.findIndex(req.user.id) > -1) {
+            return res.status(401).json({ error: "student is already added" })
+        }
+
+        StudentsList.findOneAndUpdate({
+            trainerId: req.body.trainerId
+        },
+        { $push: {students: req.user.id}
+        }).then(studentsList => {
+            res.status(200).json({
+                studentsList: studentsList,
+                accessToken,
+                refreshToken
+            })
+        })
+    })
+})
+
+app.post("/delete_student_list", auth, (req, res) => {
+    if (req.user.role != "student") {
+        return res.status(401).json({ error: "not permitted" })
+    }
+    let { accessToken, refreshToken } = req.user
+
+    StudentsList.findOneAndUpdate({
+        trainerId: req.body.trainerId
+    },
+    { $pull: {students: req.user.id}
+    }).then(studentsList => {
         res.status(200).json({
-            notifications: bookings,
+            studentsList: studentsList,
             accessToken,
             refreshToken
         })
