@@ -263,13 +263,40 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
             const horseUnavailable = new HorseUnavailable({
                 id: req.body.id, date: date
             })
-            horseUnavailable.save().then(() => console.log('Unavailable entry added!'))
-
-            res.status(200).json({
-                id: req.body.id,
-                date: date,
-                accessToken,
-                refreshToken
+            horseUnavailable.save().then(() => {
+                Booking.find({
+                    horseId: req.body.id,
+                    date: date,
+                    isCancelled: false
+                }).then((bookings) => {
+                    bookings.forEach((book) => {
+                        const notification = new TrainerNotification({
+                            bookingId: book._id,
+                            type: "canceled",
+                            trainerId: book.trainerId,
+                            dateCreated: new Date()
+                        })
+                        notification.save()
+                    })
+                    
+                    Booking.updateMany({
+                        horseId: req.body.id,
+                        date: date,
+                        isCancelled: false
+                    },
+                    {
+                        $set: {
+                            isCancelled: true
+                        }
+                    }).then(() => {
+                        res.status(200).json({
+                            id: req.body.id,
+                            date: date,
+                            accessToken,
+                            refreshToken
+                        })
+                    })
+                })
             })
         }
     })
