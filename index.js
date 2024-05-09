@@ -66,10 +66,6 @@ const durations = [{
     minutes: 60
 }]
 
-app.get("/", (req, res) => {
-    res.send("Get / ")
-})
-
 app.post("/register", (req, res) => {
 
     if (!req.body.phone || !req.body.password || req.body.phone.length != 12
@@ -90,7 +86,7 @@ app.post("/register", (req, res) => {
 
             let newId = Math.floor(Math.random() * 9000000) + 1000000
             const accessToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name },
-                process.env.TOKEN_STRING || "secret string", {expiresIn: 30}
+                process.env.TOKEN_STRING || "secret string", {expiresIn: '2h'}
             );
             const refreshToken = jwt.sign({  id: newId, phone: req.body.phone, role, name: req.body.name }, 
                 process.env.TOKEN_STRING || "secret string", { expiresIn: '100d' }
@@ -133,7 +129,7 @@ app.post("/login", (req, res) => {
                 const accessToken = jwt.sign(
                     { id: data.id, phone: data.phone, role: data.role, name: data.name,
                         trainerType: data.trainerType },
-                        process.env.TOKEN_STRING || "secret string", {expiresIn: 30}
+                        process.env.TOKEN_STRING || "secret string", {expiresIn: '2h'}
                 );
             
                 const refreshToken = jwt.sign(
@@ -264,11 +260,20 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
                 id: req.body.id, date: date
             })
             horseUnavailable.save().then(() => {
+                let start = new Date(date)
+                start.setHours(0,0,0,0)
+
+                let end = new Date(date)
+                end.setHours(23,59,99,99)
+
+                console.log(start, end)
+
                 Booking.find({
                     horseId: req.body.id,
-                    date: date,
+                    date: {$gte: start, $lt: end},
                     isCancelled: false
                 }).then((bookings) => {
+                    console.log(bookings)
                     bookings.forEach((book) => {
                         const notification = new TrainerNotification({
                             bookingId: book._id,
@@ -277,11 +282,12 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
                             dateCreated: new Date()
                         })
                         notification.save()
+                        console.log(notification)
                     })
                     
                     Booking.updateMany({
                         horseId: req.body.id,
-                        date: date,
+                        date: {$gte: start, $lt: end},
                         isCancelled: false
                     },
                     {
@@ -431,25 +437,53 @@ app.post("/undo_working_day", auth, (req, res) => {
         if (data.deletedCount == 0) {
             return res.status(401).json({ message: "no such entry" })
         }
-        return data
-    }).then(data => {
-        Booking.updateMany({
+
+        console.log("result")
+        let start = new Date(date)
+        start.setHours(0,0,0,0)
+
+        let end = new Date(date)
+        end.setHours(23,59,99,99)
+
+        console.log(start, end)
+
+        Booking.find({
             trainerId: req.user.id,
-            date
-        }, {
-            $set: {
-                isCancelled: true,
-            }
-        }).then(result => {
-            console.log(result)
-            res.status(200).json({
-                message: "Working day was removed.",
-                accessToken,
-                refreshToken
+            date: {$gte: start, $lt: end},
+            isCancelled: false
+        }).then((bookings) => {
+            console.log(bookings)
+            bookings.forEach((book) => {
+                const notification = new TrainerNotification({
+                    bookingId: book._id,
+                    type: "canceled",
+                    trainerId: book.trainerId,
+                    dateCreated: new Date()
+                })
+                notification.save()
+                console.log(notification)
+            })
+            
+            Booking.updateMany({
+                trainerId: req.user.id,
+                date: {$gte: start, $lt: end},
+                isCancelled: false
+            },
+            {
+                $set: {
+                    isCancelled: true
+                }
+            }).then(() => {
+                res.status(200).json({
+                    message: "Working day was removed.",
+                    accessToken,
+                    refreshToken
+                })
             })
         })
     })
 })
+
 
 app.post("/get_working_days", auth, (req, res) => {
     if (req.user.role != "trainer") {
@@ -1290,7 +1324,9 @@ app.post("/add_student_list", auth, (req, res) => {
         StudentsList.findOneAndUpdate({
             trainerId: req.body.trainerId
         },
-        { $push: {students: req.user.id}
+        { $push: {students: req.user.id},
+        },
+        {new: true
         }).then(studentsList => {
             res.status(200).json({
                 studentsList: studentsList,
@@ -1311,6 +1347,8 @@ app.post("/delete_student_list", auth, (req, res) => {
         trainerId: req.body.trainerId
     },
     { $pull: {students: req.user.id}
+    },
+    {new: true
     }).then(studentsList => {
         res.status(200).json({
             studentsList: studentsList,

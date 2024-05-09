@@ -25,7 +25,7 @@ const verifyToken = (req, res, next) => {
             accessToken = jwt.sign({
                 id: refreshDecoded.id, phone: refreshDecoded.phone, role: refreshDecoded.role,
                 name: refreshDecoded.name, trainerType: refreshDecoded.trainerType
-            }, process.env.TOKEN_STRING || "secret string", {expiresIn: 30});
+            }, process.env.TOKEN_STRING || "secret string", {expiresIn: '2h'});
             refreshToken = jwt.sign({
                 id: refreshDecoded.id, phone: refreshDecoded.phone, role: refreshDecoded.role,
                 name: refreshDecoded.name, trainerType: refreshDecoded.trainerType
