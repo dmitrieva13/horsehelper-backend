@@ -1041,6 +1041,7 @@ app.post("/get_slots_for_booking", auth, (req, res) => {
             workingDays.forEach(day => {
 
                 const trainerI = trainers.findIndex(e => e.id == day.trainerId)
+                if (trainerI == -1) return
 
                 let trainerToAdd = {
                     id: day.trainerId,
