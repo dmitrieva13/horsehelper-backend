@@ -1317,7 +1317,7 @@ app.post("/add_student_list", auth, (req, res) => {
     StudentsList.findOne({
         trainerId: req.body.trainerId
     }).then(studentList => {
-        if (studentList.students.findIndex(req.user.id) > -1) {
+        if (studentList.students.findIndex((el) => el == req.user.id) > -1) {
             return res.status(401).json({ error: "student is already added" })
         }
 
