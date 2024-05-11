@@ -947,7 +947,7 @@ app.post("/get_all_bookings", auth, (req, res) => {
             User.find({
                 role: "trainer"
             }).then((trainers) => {
-                Horses.find({}).then(horses => {
+                Horse.find({}).then(horses => {
                     bookings.forEach((booking) => {
                         let bookingComplete = booking._doc
 
