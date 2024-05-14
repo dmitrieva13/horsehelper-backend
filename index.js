@@ -248,14 +248,18 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
         return res.status(401).json({ error: "not permitted" })
     }
     let { accessToken, refreshToken } = req.user
+
+    let date = new Date(req.body.date)
+    if (date.toString() == "Invalid Date") {
+        return res.status(401).json({ message: "date is wrong" })
+    }
     
     Horse.findOne({
         id: req.body.id
     }).then((data) => {
         if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
         else {
-            
-            let date = new Date(req.body.date)
+            console.log("fired")
             const horseUnavailable = new HorseUnavailable({
                 id: req.body.id, date: date
             })
