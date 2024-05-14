@@ -168,23 +168,28 @@ app.post("/register_trainer", auth, (req, res) => {
         else {
 
             let newId = Math.floor(Math.random() * 9000000) + 1000000
-            const user = new User({
-                phone: req.body.phone, password: req.body.password, id: newId, role: "trainer",
-                name: req.body.name, trainerPhoto: req.body.trainerPhoto,
-                trainerDescription: req.body.trainerDescription, trainerType: req.body.trainerType
-            })
-            user.save().then(() => console.log('Trainer added!'))
 
-            const studentsList = new StudentsList({
-                trainerId: newId, students: []
-            })
-            studentsList.save().then(() => console.log("Students list created!"))
-          
-            res.status(200).json({
-                message: "New trainer added",
-                phone: req.body.phone,
-                accessToken,
-                refreshToken
+            let password
+            cryptPassword(req.body.password, (err, hash) => {
+                password = hash
+                const user = new User({
+                    phone: req.body.phone, password: password, id: newId, role: "trainer",
+                    name: req.body.name, trainerPhoto: req.body.trainerPhoto,
+                    trainerDescription: req.body.trainerDescription, trainerType: req.body.trainerType
+                })
+                user.save().then(() => console.log('Trainer added!'))
+
+                const studentsList = new StudentsList({
+                    trainerId: newId, students: []
+                })
+                studentsList.save().then(() => console.log("Students list created!"))
+            
+                res.status(200).json({
+                    message: "New trainer added",
+                    phone: req.body.phone,
+                    accessToken,
+                    refreshToken
+                })
             })
         }
     })
@@ -318,11 +323,8 @@ app.post("/make_horse_available", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
     
-    let date
-    try {
-        date = new Date(req.body.date)
-    }
-    catch(e){
+    let date = new Date(req.body.date)
+    if (date.toString() == "Invalid Date") {
         return res.status(401).json({ message: "date is wrong" })
     }
     
@@ -366,6 +368,9 @@ app.post("/new_announcement", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
     
+    if (!req.body.title || req.body.title == "") {
+        return res.status(401).json({ error: "empty title" })
+    }
             
     let date = new Date()
     let id = cyrillicToTranslit.transform(req.body.title, '-').toLowerCase()
@@ -399,24 +404,27 @@ app.post("/set_working_day", auth, (req, res) => {
     let { accessToken, refreshToken } = req.user
 
     
-    let date
-    try {
-        date = new Date(req.body.date)
-    }
-    catch(e){
+    let date = new Date(req.body.date)
+    if (date.toString() == "Invalid Date") {
         return res.status(401).json({ message: "date is wrong" })
     }
 
-    const workingDay = new WorkingDay({
-        trainerId: req.user.id, date, type: req.user.trainerType
-    })
-    workingDay.save().then(() => console.log('New working day added!'))
+    WorkingDay.findOne({
+        trainerId: req.user.id, date
+    }).then((data) => {
+        if (data) { return res.status(401).json({ message: "working day is already added" }) }
 
-    res.status(200).json({
-        message: "Working day is added",
-        date: date,
-        accessToken,
-        refreshToken
+        const workingDay = new WorkingDay({
+            trainerId: req.user.id, date, type: req.user.trainerType
+        })
+        workingDay.save().then(() => console.log('New working day added!'))
+    
+        res.status(200).json({
+            message: "Working day is added",
+            date: date,
+            accessToken,
+            refreshToken
+        })
     })
 })
 
@@ -427,11 +435,8 @@ app.post("/undo_working_day", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
     
-    let date
-    try {
-        date = new Date(req.body.date)
-    }
-    catch(e){
+    let date = new Date(req.body.date)
+    if (date.toString() == "Invalid Date") {
         return res.status(401).json({ message: "date is wrong" })
     }
     
@@ -567,11 +572,8 @@ app.post("/new_booking", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
     
-    let date
-    try {
-        date = new Date(req.body.date)
-    }
-    catch(e){
+    let date = new Date(req.body.date)
+    if (date.toString() == "Invalid Date") {
         return res.status(401).json({ message: "date is wrong" })
     }
 
@@ -1006,11 +1008,8 @@ app.post("/cancel_booking", auth, (req, res) => {
     }
     let { accessToken, refreshToken } = req.user
     
-    let date
-    try {
-        date = new Date(req.body.date)
-    }
-    catch(e){
+    let date = new Date(req.body.date)
+    if (date.toString() == "Invalid Date") {
         return res.status(401).json({ message: "date is wrong" })
     }
 
