@@ -19,18 +19,18 @@ app.use(cors(corsOptions));
 
 dotenv.config();
 
-mongoose.connect("mongodb://localhost:27017")
+mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
 const User = require("./models/User.js")
 const Horse = require("./models/Horse.js")
 const HorseUnavailable = require("./models/HorseUnavailable")
 const Announcement = require("./models/Announcement")
 const WorkingDay = require("./models/WorkingDay")
 const Booking = require("./models/Booking.js");
-const TrainerNotification = require("./models/TrainerNotification.js");
-const StudentsList = require("./models/StudentsList.js");
 
 // Middleware
 const auth = require("./middleware/auth");
+const TrainerNotification = require("./models/TrainerNotification.js");
+const StudentsList = require("./models/StudentsList.js");
 
 const cyrillicToTranslit = new ctt();
 
@@ -46,7 +46,8 @@ let cryptPassword = function(password, callback) {
 }
 
 let comparePassword = function(plainPass, hashword, callback) {
-    bcrypt.compare(plainPass, hashword, function(err, isPasswordMatch) {
+    bcrypt.compare(plainPass, hashword, function(err, isPasswordMatch) {  
+        // console.log(err) 
         return err == null ?
             callback(null, isPasswordMatch) :
             callback(err);
@@ -1359,5 +1360,6 @@ app.post("/delete_student_list", auth, (req, res) => {
         })
     })
 })
+
 
 app.listen(3001)
