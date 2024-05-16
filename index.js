@@ -25,7 +25,9 @@ const Horse = require("./models/Horse.js")
 const HorseUnavailable = require("./models/HorseUnavailable")
 const Announcement = require("./models/Announcement")
 const WorkingDay = require("./models/WorkingDay")
-const Booking = require("./models/Booking.js");
+const Booking = require("./models/Booking.js")
+const TrainerNotification = require("./models/TrainerNotification.js")
+const StudentsList = require("./models/StudentsList.js")
 
 // Middleware
 const auth = require("./middleware/auth");
