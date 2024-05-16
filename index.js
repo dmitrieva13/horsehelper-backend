@@ -19,7 +19,7 @@ app.use(cors(corsOptions));
 
 dotenv.config();
 
-mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
+mongoose.connect("mongodb://localhost:27017")
 const User = require("./models/User.js")
 const Horse = require("./models/Horse.js")
 const HorseUnavailable = require("./models/HorseUnavailable")
@@ -29,8 +29,6 @@ const Booking = require("./models/Booking.js");
 
 // Middleware
 const auth = require("./middleware/auth");
-const TrainerNotification = require("./models/TrainerNotification.js");
-const StudentsList = require("./models/StudentsList.js");
 
 const cyrillicToTranslit = new ctt();
 
@@ -46,8 +44,7 @@ let cryptPassword = function(password, callback) {
 }
 
 let comparePassword = function(plainPass, hashword, callback) {
-    bcrypt.compare(plainPass, hashword, function(err, isPasswordMatch) {  
-        // console.log(err) 
+    bcrypt.compare(plainPass, hashword, function(err, isPasswordMatch) {
         return err == null ?
             callback(null, isPasswordMatch) :
             callback(err);
