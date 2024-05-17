@@ -67,8 +67,8 @@ const durations = [{
 
 app.post("/register", (req, res) => {
 
-    if (!req.body.phone || !req.body.password || req.body.phone.length != 12
-            || req.body.password.length < 4 || req.body.password.length > 30) {
+    if (!req.body.phone || !req.body.password || !req.body.name || req.body.phone.length != 12
+            || req.body.password.length < 4 || req.body.password.length > 30 || req.body.name.length < 1) {
         return res.status(401).json({ message: "wrong credentials" })
     }
 
@@ -149,8 +149,9 @@ app.post("/login", (req, res) => {
 
 app.post("/register_trainer", auth, (req, res) => {
 
-    if (!req.body.phone || !req.body.password || req.body.phone.length != 12
-            || req.body.password.length < 4 || req.body.password.length > 30) {
+    if (!req.body.phone || !req.body.password || !req.body.name || !req.body.trainerType 
+            || req.body.phone.length != 12 || req.body.password.length < 4 || req.body.password.length > 30 
+            || req.body.name.length < 1 || req.body.trainerType.length < 1) {
         return res.status(401).json({ message: "wrong credentials" })
     }
 
@@ -195,6 +196,10 @@ app.post("/register_trainer", auth, (req, res) => {
 })
 
 app.post("/add_horse", auth, (req, res) => {
+    if ( !req.body.name || !req.body.types || req.body.name.length < 1 || req.body.types.length < 1) {
+        return res.status(401).json({ message: "wrong credentials" })
+    }
+
     if (req.user.role != "admin") {
         return res.status(401).json({ error: "not permitted" })
     }
@@ -202,19 +207,26 @@ app.post("/add_horse", auth, (req, res) => {
     let { accessToken, refreshToken } = req.user
     
     let newId = cyrillicToTranslit.transform(req.body.name, '-').toLowerCase()
-    const horse = new Horse({
-        id: newId, name: req.body.name, photo: req.body.photo, description: req.body.description,
-        types: req.body.types
-    })
-    horse.save().then(() => console.log('Horse added!'))
-  
-    res.status(200).json({
-        message: "New horse added",
-        id: newId,
-        accessToken,
-        refreshToken
-    })
 
+    Horse.findOne({
+        id: newId
+    }).then((data) => {
+        if (data) { return res.status(401).json({ message: "horse is already registered" }) }
+        else {
+            const horse = new Horse({
+                id: newId, name: req.body.name, photo: req.body.photo, description: req.body.description,
+                types: req.body.types
+            })
+            horse.save().then(() => console.log('Horse added!'))
+        
+            res.status(200).json({
+                message: "New horse added",
+                id: newId,
+                accessToken,
+                refreshToken
+            })
+        }
+    })
 })
 
 app.post("/get_horse", (req, res) => {
@@ -263,54 +275,60 @@ app.post("/make_horse_unavailable", auth, (req, res) => {
     }).then((data) => {
         if (!data) { return res.status(401).json({ message: "no horse with such id" }) }
         else {
-            console.log("fired")
-            const horseUnavailable = new HorseUnavailable({
-                id: req.body.id, date: date
-            })
-            horseUnavailable.save().then(() => {
-                let start = new Date(date)
-                start.setHours(0,0,0,0)
-
-                let end = new Date(date)
-                end.setHours(23,59,99,99)
-
-                console.log(start, end)
-
-                Booking.find({
-                    horseId: req.body.id,
-                    date: {$gte: start, $lt: end},
-                    isCancelled: false
-                }).then((bookings) => {
-                    console.log(bookings)
-                    bookings.forEach((book) => {
-                        const notification = new TrainerNotification({
-                            bookingId: book._id,
-                            type: "canceled",
-                            trainerId: book.trainerId,
-                            dateCreated: new Date()
-                        })
-                        notification.save()
-                        console.log(notification)
+            HorseUnavailable.findOne({
+                id: req.body.id, date
+            }).then((data) => {
+                if (data) { return res.status(401).json({ message: "unavailable day is already added" }) }
+                else {
+                    const horseUnavailable = new HorseUnavailable({
+                        id: req.body.id, date: date
                     })
-                    
-                    Booking.updateMany({
-                        horseId: req.body.id,
-                        date: {$gte: start, $lt: end},
-                        isCancelled: false
-                    },
-                    {
-                        $set: {
-                            isCancelled: true
-                        }
-                    }).then(() => {
-                        res.status(200).json({
-                            id: req.body.id,
-                            date: date,
-                            accessToken,
-                            refreshToken
+                    horseUnavailable.save().then(() => {
+                        let start = new Date(date)
+                        start.setHours(0,0,0,0)
+
+                        let end = new Date(date)
+                        end.setHours(23,59,99,99)
+
+                        console.log(start, end)
+
+                        Booking.find({
+                            horseId: req.body.id,
+                            date: {$gte: start, $lt: end},
+                            isCancelled: false
+                        }).then((bookings) => {
+                            console.log(bookings)
+                            bookings.forEach((book) => {
+                                const notification = new TrainerNotification({
+                                    bookingId: book._id,
+                                    type: "canceled",
+                                    trainerId: book.trainerId,
+                                    dateCreated: new Date()
+                                })
+                                notification.save()
+                                console.log(notification)
+                            })
+                            
+                            Booking.updateMany({
+                                horseId: req.body.id,
+                                date: {$gte: start, $lt: end},
+                                isCancelled: false
+                            },
+                            {
+                                $set: {
+                                    isCancelled: true
+                                }
+                            }).then(() => {
+                                res.status(200).json({
+                                    id: req.body.id,
+                                    date: date,
+                                    accessToken,
+                                    refreshToken
+                                })
+                            })
                         })
                     })
-                })
+                }
             })
         }
     })
