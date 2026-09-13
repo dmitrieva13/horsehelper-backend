@@ -19,8 +19,7 @@ app.use(cors(corsOptions));
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3001;
-const databaseURL = process.env.MONGODB_URI || "mongodb://localhost:27017";
+// const PORT = process.env.PORT || 3001;
 
 mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
 // mongoose.connect("mongodb://localhost:27017")
@@ -1383,5 +1382,5 @@ app.post("/delete_student_list", auth, (req, res) => {
 })
 
 
-// app.listen(3001)
-app.listen(PORT)
+app.listen(3001)
+// app.listen(PORT)
