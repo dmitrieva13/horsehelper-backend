@@ -21,7 +21,7 @@ dotenv.config();
 
 // const PORT = process.env.PORT || 3001;
 
-mongoose.connect("mongodb+srv://michaelismur:iND7HQhat01Qtwbp@horsehelper.g1dwcs9.mongodb.net/")
+mongoose.connect("mongodb+srv://michaelismur:XN39Ph7CD1uoub8a@horsehelper.g1dwcs9.mongodb.net/")
 // mongoose.connect("mongodb://localhost:27017")
 const User = require("./models/User.js")
 const Horse = require("./models/Horse.js")
