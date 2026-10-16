@@ -1381,6 +1381,10 @@ app.post("/delete_student_list", auth, (req, res) => {
     })
 })
 
+app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+});
+
 
 app.listen(3001)
 // app.listen(PORT)
